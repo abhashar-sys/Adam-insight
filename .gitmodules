@@ -1,0 +1,4 @@
+[submodule ".plx-utils"]
+	path = .plx-utils
+	url = ssh://git@git.source.akamai.com:7999/ns/plx-utils.git
+	branch = master
