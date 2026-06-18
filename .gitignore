@@ -1,1 +1,4 @@
 *.iml
+.venv/
+.env
+__pycache__/
