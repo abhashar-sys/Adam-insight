@@ -14,7 +14,6 @@ def _format_customer(customer,matched_cidr:str)->dict:
         "customer":customer.customer,
         "account_id":customer.accountId,
         "account_name":customer.accountName,
-        "contract_id":customer.contractId,
         "matched_cidr":matched_cidr,
         "region":customer.region,
         "location":customer.location,
