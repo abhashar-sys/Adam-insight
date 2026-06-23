@@ -5,8 +5,6 @@ from models import MitigationItem,MitigationNetworkEntry
 def _network_cidr(network_entry: MitigationNetworkEntry) -> str|None:
     if network_entry.network:
         return network_entry.network
-    if isinstance(network_entry.prefix, str) and "/" in network_entry.prefix:
-        return network_entry.prefix
     return None
 
 def _date_sort_key(value) -> tuple[int, int|str]:
@@ -46,27 +44,29 @@ def _find_best_match(target_net,items):
     return best_match
 
 def _extract_locations(network_entry,requested_locations):
-    seen_locations=set()
     location_details=[]
-    for config in network_entry.configs:
-        functions=[
-            {
-                "function":fn.get("function"),
-                "config":fn.get("config")
-            }
-            for fn in config.get("functions",[])
-        ]
-        for loc in config.get("locations",[]):
-            loc_name=loc.get("location")
-            if loc_name in seen_locations:
-                continue
-            if loc_name in requested_locations:
-                seen_locations.add(loc_name)
-                location_details.append({
-                    "location":loc_name,
+    for requested_location in requested_locations:
+        matched=None
+        for config in network_entry.configs:
+            for loc in config.get("locations",[]):
+                if loc.get("location") != requested_location:
+                    continue
+                matched={
+                    "location":requested_location,
                     "isSuppressed":loc.get("isSuppressed",False),
-                    "functions":functions
-                })
+                    "functions":[
+                        {
+                            "function":fn.get("function"),
+                            "config":fn.get("config")
+                        }
+                        for fn in config.get("functions",[])
+                    ]
+                }
+                break
+            if matched:
+                break
+        if matched:
+            location_details.append(matched)
     return location_details
 
 def _format_output(item,network_entry,location_details):

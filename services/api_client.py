@@ -9,7 +9,8 @@ def get_mitigation_events() -> MitigationResponse:
     return MitigationResponse(**r.json())
 
 def get_customers() -> list[Customer]:
-    r=httpx.get(f"{BASE_URL}/customers/v1/customers",timeout=15.0)
+    r=httpx.get(f"{BASE_URL}/customers/v1/customers",
+                params={"includeIPv6":True},timeout=15.0)
     r.raise_for_status()
     return [Customer(**item) for item in r.json()]
 

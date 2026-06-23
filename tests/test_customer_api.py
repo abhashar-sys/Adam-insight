@@ -23,9 +23,9 @@ class TestMatchesNetwork:
         assert _matches_network(target, "10.0.0.0/8") is True
 
     def test_candidate_subnet_of_target(self):
-        # wider target that contains the candidate CIDR
+        # target broader than candidate should not match containment semantics
         target = ip_network("10.0.0.0/8")
-        assert _matches_network(target, "10.0.1.0/24") is True
+        assert _matches_network(target, "10.0.1.0/24") is False
 
     def test_exact_match(self):
         target = ip_network("10.0.1.0/24")

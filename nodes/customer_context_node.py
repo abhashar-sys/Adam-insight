@@ -46,11 +46,11 @@ def _run_attack_reports(customers:list[dict],network:str)->list[dict]:
 
     return attack_results
 
-def _format_mitigation_output(mitigation_result:dict|None,mitigation_error:str|None)->dict:
+def _format_mitigation_output(mitigation_result:dict|None,mitigation_error:str|None)->dict|None:
     if mitigation_error:
         return {"error":mitigation_error}
-    if not mitigation_result:
-        return {"matched_cidr":None,"lifecycle_state":None,"locations":[]}
+    if not mitigation_result or not mitigation_result.get("matched_cidr"):
+        return None
     return {
         "matched_cidr":mitigation_result.get("matched_cidr"),
         "event_id":mitigation_result.get("event_id"),

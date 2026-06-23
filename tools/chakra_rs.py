@@ -95,7 +95,7 @@ def _analyse_mitigation_effectiveness(events:list[dict])->dict:
     failed=sum(1 for e in events if e.get("mitigation_successful") is False)
     unknown=total-successful-failed
     recurring_unmitigated_vectors=Counter(
-        v for e in events for v in e.get("non_mitigation_vectors",[])
+        v for e in events for v in e.get("non_mitigated_vectors", e.get("non_mitigation_vectors",[]))
     )
     return {
         "success_rate_percent":round(successful/total*100,1) if total else None,
@@ -172,22 +172,41 @@ def _format_event(event,active_event_ids)->dict:
 
 def find_attack_context(customer_id:int, customer_name:str, target_network:str)-> dict:
     target_net=ip_network(target_network, strict=False)
-    active_attacks=get_customer_attacks(customer_id)
-    active_event_ids=_build_active_event_ids(active_attacks)
+    active_event_ids=set()
+    active_attacks_error=None
+    attack_events_error=None
+
+    try:
+        active_attacks=get_customer_attacks(customer_id)
+        active_event_ids=_build_active_event_ids(active_attacks)
+    except Exception as e:
+        active_attacks_error=str(e)
+
     time_min,time_max=_get_time_window()
-    attack_events=get_attack_events(customer_name,time_min,time_max)
+    try:
+        attack_events=get_attack_events(customer_name,time_min,time_max)
+    except Exception as e:
+        attack_events=[]
+        attack_events_error=str(e)
+
     kept_events=[
         _format_event(event,active_event_ids)
         for event in attack_events
         if _covers_target(event.destinationIPs,target_net)
     ]
     historical_pattern=analyse_historical_pattern(kept_events)
+    chakra_rs_failure=active_attacks_error is not None or attack_events_error is not None
     return {
         "customer_name":customer_name,
         "kept_events":kept_events,
         "has_recent_attacks":len(kept_events)>0,
         "message":None if kept_events else "No recent attack events targeted this network",
-        "historical_pattern":historical_pattern
+        "historical_pattern":historical_pattern,
+        "chakra_rs_failure":chakra_rs_failure,
+        "chakra_rs_errors":{
+            "active_attacks_error":active_attacks_error,
+            "attack_events_error":attack_events_error
+        }
 
     }
     

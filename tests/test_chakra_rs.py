@@ -472,6 +472,28 @@ class TestFindAttackContext:
         result = find_attack_context(1, "acme", "10.0.1.0/24")
         assert result["kept_events"][0]["is_active_attack"] is True
 
+    @patch("tools.chakra_rs.get_attack_events")
+    @patch("tools.chakra_rs.get_customer_attacks")
+    def test_sets_active_attacks_error_marker_when_active_call_fails(self, mock_attacks, mock_events):
+        mock_attacks.side_effect = Exception("active attacks timeout")
+        mock_events.return_value = [
+            self._make_event(self._make_dest_ip("10.0.0.0", 8), event_id=5)
+        ]
+        result = find_attack_context(1, "acme", "10.0.1.0/24")
+        assert result["chakra_rs_failure"] is True
+        assert result["chakra_rs_errors"]["active_attacks_error"] == "active attacks timeout"
+        assert result["chakra_rs_errors"]["attack_events_error"] is None
+
+    @patch("tools.chakra_rs.get_attack_events")
+    @patch("tools.chakra_rs.get_customer_attacks")
+    def test_sets_attack_events_error_marker_when_events_call_fails(self, mock_attacks, mock_events):
+        mock_attacks.return_value = []
+        mock_events.side_effect = Exception("attack events timeout")
+        result = find_attack_context(1, "acme", "10.0.1.0/24")
+        assert result["chakra_rs_failure"] is True
+        assert result["chakra_rs_errors"]["active_attacks_error"] is None
+        assert result["chakra_rs_errors"]["attack_events_error"] == "attack events timeout"
+
 
 # ---------------------------------------------------------------------------
 # find_attack_context_for_all_customers

@@ -29,9 +29,9 @@ class TestNetworkCidr:
         entry = MitigationNetworkEntry(network="10.0.0.0/8", prefix="192.168.1.0/24")
         assert _network_cidr(entry) == "10.0.0.0/8"
 
-    def test_returns_prefix_when_cidr_formatted_and_no_network(self):
+    def test_returns_none_when_only_prefix_present(self):
         entry = MitigationNetworkEntry(prefix="192.168.1.0/24")
-        assert _network_cidr(entry) == "192.168.1.0/24"
+        assert _network_cidr(entry) is None
 
     def test_returns_none_when_prefix_is_plain_int(self):
         entry = MitigationNetworkEntry(prefix=12345)
