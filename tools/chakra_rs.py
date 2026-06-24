@@ -28,7 +28,7 @@ def _covers_target(destination_ips,target_net)->bool:
     return False
 
 def _parse_time(time_str:str)->datetime:
-    return datetime.strptime(time_str,"%Y-%m-%dT%H:%M:%SZ")
+    return datetime.strptime(time_str,"%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
 
 def _compute_duration_hours(event:dict)->float|None:
     if not event.get("end_time"):

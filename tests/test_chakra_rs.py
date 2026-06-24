@@ -96,7 +96,7 @@ class TestCoversTarget:
 class TestParseTime:
     def test_parses_valid_time_string(self):
         result = _parse_time("2024-01-15T10:30:00Z")
-        assert result == datetime(2024, 1, 15, 10, 30, 0)
+        assert result == datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
 
     def test_raises_on_invalid_format(self):
         with pytest.raises(ValueError):

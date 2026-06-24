@@ -322,3 +322,257 @@ class TestErrorHandling:
         ctx = result["customer_context"]
 
         assert ctx["mitigation"] is None
+
+
+class TestEndToEndFlow:
+    """
+    Comprehensive end-to-end test demonstrating complete data flow:
+    INPUT (network + locations) → PROCESSING → OUTPUT (complete state)
+    """
+
+    @patch("nodes.customer_context_node.find_attack_context")
+    @patch("nodes.customer_context_node.find_customer_context")
+    @patch("nodes.customer_context_node.find_mitigation_context")
+    def test_complete_flow_from_inputs_to_state(
+        self, mock_mitigation, mock_customer, mock_attack, graph
+    ):
+        """
+        END-TO-END TEST: Complete flow from 3 inputs to final state
+        
+        Flow:
+        1. INPUT: network = "10.0.1.0/24", locations = ["fll1", "ips9"]
+        2. PROCESSING: Graph invokes customer_context_node
+           - Looks up mitigation via Xiphos API
+           - Looks up customers via Customer API
+           - Looks up attack reports via Chakra-RS API
+        3. OUTPUT: AgentState is updated with customer_context containing:
+           - mitigation data
+           - matching customers
+           - attack reports for those customers
+        """
+        # Setup mocks for all 3 external dependencies
+        mock_mitigation.return_value = MOCK_MITIGATION
+        mock_customer.return_value = MOCK_CUSTOMERS
+        mock_attack.return_value = MOCK_ATTACK
+
+        # INPUT: Initial state with network and locations
+        input_state = {
+            "network": SAMPLE_NETWORK,
+            "locations": SAMPLE_LOCATIONS,
+        }
+
+        # PROCESSING: Invoke graph
+        output_state = graph.invoke(input_state)
+
+        # VALIDATION 1: Input fields are preserved
+        assert output_state["network"] == SAMPLE_NETWORK
+        assert output_state["locations"] == SAMPLE_LOCATIONS
+
+        # VALIDATION 2: Customer context is populated
+        assert "customer_context" in output_state
+        customer_context = output_state["customer_context"]
+
+        # VALIDATION 3: Mitigation section is complete
+        assert customer_context["mitigation"] is not None
+        mitigation = customer_context["mitigation"]
+        assert mitigation["matched_cidr"] == "10.0.0.0/8"
+        assert mitigation["lifecycle_state"] == "ACTIVE"
+        assert mitigation["event_customer"] == "acme"
+        assert mitigation["account_name"] == "Acme Corp"
+        assert len(mitigation["locations"]) == 1
+        assert mitigation["locations"][0]["location"] == "fll1"
+
+        # VALIDATION 4: Customers section is complete
+        assert customer_context["customers"]["error"] is None
+        assert len(customer_context["customers"]["matches"]) == 1
+        customer_match = customer_context["customers"]["matches"][0]
+        assert customer_match["customer"] == "acme"
+        assert customer_match["account_name"] == "Acme Corp"
+        assert customer_match["matched_cidr"] == "10.0.0.0/8"
+
+        # VALIDATION 5: Attack reports section is complete
+        assert len(customer_context["attack_reports"]) == 1
+        attack_report = customer_context["attack_reports"][0]
+        assert attack_report["customer_name"] == "acme"
+        assert attack_report["has_recent_attacks"] is False
+        assert "historical_pattern" in attack_report
+        assert "kept_events" in attack_report
+
+        # Verify all mocks were called exactly once
+        mock_mitigation.assert_called_once_with(SAMPLE_NETWORK, SAMPLE_LOCATIONS)
+        mock_customer.assert_called_once_with(SAMPLE_NETWORK)
+        mock_attack.assert_called_once()
+
+    @patch("nodes.customer_context_node.find_attack_context")
+    @patch("nodes.customer_context_node.find_customer_context")
+    @patch("nodes.customer_context_node.find_mitigation_context")
+    def test_e2e_multiple_customers_flow(
+        self, mock_mitigation, mock_customer, mock_attack, graph
+    ):
+        """
+        END-TO-END TEST: Multiple customers found and all get attack reports
+        
+        Flow:
+        INPUT (1 network) → Find 2 customers → Get attack reports for both
+        """
+        # Create mock data for 2 customers
+        mock_customers_data = [
+            {
+                "customer_id": 1,
+                "customer": "acme",
+                "account_id": "acc-1",
+                "account_name": "Acme Corp",
+                "matched_cidr": "10.0.0.0/8",
+            },
+            {
+                "customer_id": 2,
+                "customer": "globex",
+                "account_id": "acc-2",
+                "account_name": "Globex Inc",
+                "matched_cidr": "10.1.0.0/8",
+            },
+        ]
+
+        mock_attack_reports = [
+            {
+                "customer_name": "acme",
+                "kept_events": [
+                    {
+                        "event_id": 101,
+                        "attack_id": 1001,
+                        "start_time": "2026-06-24T10:00:00Z",
+                        "end_time": "2026-06-24T10:15:00Z",
+                        "attack_vectors": ["UDP Flood"],
+                        "agr_peak_bps": 500000000,
+                        "agr_peak_pps": 1000000,
+                        "is_active_attack": False,
+                        "mitigation_successful": True,
+                        "non_mitigated_vectors": [],
+                    }
+                ],
+                "has_recent_attacks": True,
+                "message": "Recent attacks detected",
+                "historical_pattern": {
+                    "summary": "Recurring UDP flood attacks",
+                    "vectors": {"dominant_vectors": [{"vector": "UDP Flood"}]},
+                    "mitigation_effectiveness": {"success_rate_percent": 95},
+                    "duration": {"ongoing_count": 0},
+                },
+                "chakra_rs_failure": False,
+                "chakra_rs_errors": None,
+            },
+            {
+                "customer_name": "globex",
+                "kept_events": [],
+                "has_recent_attacks": False,
+                "message": "No recent attacks",
+                "historical_pattern": {
+                    "summary": "No attacks in 90 days",
+                },
+                "chakra_rs_failure": False,
+                "chakra_rs_errors": None,
+            },
+        ]
+
+        mock_mitigation.return_value = MOCK_MITIGATION
+        mock_customer.return_value = mock_customers_data
+        mock_attack.side_effect = mock_attack_reports
+
+        # INPUT: Network and locations
+        result = graph.invoke({
+            "network": SAMPLE_NETWORK,
+            "locations": SAMPLE_LOCATIONS,
+        })
+
+        # VALIDATION: Both customers found
+        customers = result["customer_context"]["customers"]["matches"]
+        assert len(customers) == 2
+        assert customers[0]["customer"] == "acme"
+        assert customers[1]["customer"] == "globex"
+
+        # VALIDATION: Attack reports generated for both
+        attack_reports = result["customer_context"]["attack_reports"]
+        assert len(attack_reports) == 2
+        
+        # VALIDATION: First customer has recent attacks
+        assert attack_reports[0]["customer_name"] == "acme"
+        assert attack_reports[0]["has_recent_attacks"] is True
+        assert len(attack_reports[0]["kept_events"]) == 1
+        assert attack_reports[0]["kept_events"][0]["agr_peak_bps"] == 500000000
+
+        # VALIDATION: Second customer has no recent attacks
+        assert attack_reports[1]["customer_name"] == "globex"
+        assert attack_reports[1]["has_recent_attacks"] is False
+        assert len(attack_reports[1]["kept_events"]) == 0
+
+        # Verify attack lookup called for each customer
+        assert mock_attack.call_count == 2
+
+    @patch("nodes.customer_context_node.find_attack_context")
+    @patch("nodes.customer_context_node.find_customer_context")
+    @patch("nodes.customer_context_node.find_mitigation_context")
+    def test_e2e_handles_partial_failures_gracefully(
+        self, mock_mitigation, mock_customer, mock_attack, graph
+    ):
+        """
+        END-TO-END TEST: Graceful degradation when 1 or 2 services fail
+        
+        Flow:
+        INPUT → Some services fail → OUTPUT still contains partial results
+        """
+        mock_mitigation.return_value = MOCK_MITIGATION
+        mock_customer.return_value = MOCK_CUSTOMERS
+        mock_attack.side_effect = Exception("Chakra-RS service unavailable")
+
+        result = graph.invoke({
+            "network": SAMPLE_NETWORK,
+            "locations": SAMPLE_LOCATIONS,
+        })
+
+        ctx = result["customer_context"]
+
+        # VALIDATION: Mitigation and customer data still available
+        assert ctx["mitigation"]["matched_cidr"] == "10.0.0.0/8"
+        assert len(ctx["customers"]["matches"]) == 1
+
+        # VALIDATION: Attack reports contain error for the failed customer
+        assert len(ctx["attack_reports"]) == 1
+        assert ctx["attack_reports"][0]["chakra_rs_failure"] is True
+        assert "chakra_rs_error" in ctx["attack_reports"][0]
+
+    @patch("nodes.customer_context_node.find_attack_context")
+    @patch("nodes.customer_context_node.find_customer_context")
+    @patch("nodes.customer_context_node.find_mitigation_context")
+    def test_e2e_all_services_fail_returns_valid_structure(
+        self, mock_mitigation, mock_customer, mock_attack, graph
+    ):
+        """
+        END-TO-END TEST: All 3 services fail but output structure remains valid
+        
+        Flow:
+        INPUT → All services error → OUTPUT maintains consistent schema
+        """
+        mock_mitigation.side_effect = Exception("Xiphos down")
+        mock_customer.side_effect = Exception("Customer API down")
+        mock_attack.side_effect = Exception("Chakra-RS down")
+
+        result = graph.invoke({
+            "network": SAMPLE_NETWORK,
+            "locations": SAMPLE_LOCATIONS,
+        })
+
+        # VALIDATION: Input preserved
+        assert result["network"] == SAMPLE_NETWORK
+        assert result["locations"] == SAMPLE_LOCATIONS
+
+        # VALIDATION: Output structure is still present and valid
+        ctx = result["customer_context"]
+        assert "mitigation" in ctx
+        assert "customers" in ctx
+        assert "attack_reports" in ctx
+
+        # VALIDATION: Errors are properly recorded
+        assert "error" in ctx["mitigation"]
+        assert "error" in ctx["customers"]
+        assert ctx["customers"]["matches"] == []
+        assert isinstance(ctx["attack_reports"], list)

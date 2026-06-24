@@ -1,6 +1,6 @@
 import httpx
 from connect import BASE_URL
-from models import MitigationResponse,Customer,SingleAttack,AttackEvent
+from models import MitigationResponse, Customer, SingleAttack, AttackEvent
 
 def get_mitigation_events() -> MitigationResponse:
     r=httpx.get(f"{BASE_URL}/xiphos/api/2.2/mitigation/events",
