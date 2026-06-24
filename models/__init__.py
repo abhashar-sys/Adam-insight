@@ -10,7 +10,7 @@ Classes:
     - L4Breakdown: Layer 4 (Port) breakdown
 """
 
-from models.sflow_traffic import (
+from models.traffic_analysis import (
     TrafficQueryInput,
     TrafficQueryOutput,
     MinuteBucket,

@@ -1,5 +1,5 @@
-from tools.database.finding_peaks import find_peaks
-from utils.peak_decomposer import PeakDecomposer
+from graph.nodes.traffic_analysis import find_peaks
+from services.traffic_analyzer import PeakDecomposer
 from config.constants import TARGET_IP
 
 
