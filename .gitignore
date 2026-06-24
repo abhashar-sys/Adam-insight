@@ -32,3 +32,11 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# ── Local Verification & Data (Ignore for PR) ────────────────────
+test_on_csv.py
+plot_peaks.py
+*_peaks.png
+137.201.203.43*
+155.140.48.42*
+195.78.86.135*
