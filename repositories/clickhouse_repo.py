@@ -269,7 +269,7 @@ ORDER BY bps DESC"""
         target_filter = build_target_filter(target)
         sc_filter = build_sc_filter(device_ips)
         return f"""SELECT
-    dictGet('owl_gold.scrubCenterNetworks_dict', 'sc', toIPv4(sampler_address)) AS scrub_center,
+    if(dictGet('owl_gold.scrubCenterNetworks_dict', 'sc', toIPv4(sampler_address)) = '', concat('unmapped (', sampler_address, ')'), dictGet('owl_gold.scrubCenterNetworks_dict', 'sc', toIPv4(sampler_address))) AS scrub_center,
     sum(frame_length * if(sampling_rate > 0, sampling_rate, 1)) * 8 / 10 AS bps,
     sum(if(sampling_rate > 0, sampling_rate, 1)) / 10 AS pps
 FROM owl_bronze.sflowsPostmit
