@@ -133,7 +133,7 @@ adam-insight/
 │   ├── test_delta_calculator.py     # 8 tests for DeltaCalculator (normalization, edge cases)
 │   └── test_baseline_pooler.py      # 9 tests for baseline_pooler (pooling, shares, dedup)
 │
-├── main.py                          # (Legacy) Original entry point — replaced by run_traffic_analysis.py
+├── run_traffic_analysis.py          # Original entry point 
 ├── plot_peaks.py                    # 📊 (Local dev) Matplotlib peak visualisation from CSV
 └── test_on_csv.py                   # 📋 (Local dev) CSV-based offline peak analysis
 ```
