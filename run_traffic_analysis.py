@@ -15,87 +15,124 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def quiet_logs():
+    """Silence INFO chatter from noisy modules so they don't interleave with the report."""
+    logging.getLogger().setLevel(logging.WARNING)
+    for noisy in ("cassandra", "urllib3", "graph", "repositories", "services"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
+def _fmt_bps(bps: float) -> str:
+    for unit, div in (("Gbps", 1e9), ("Mbps", 1e6), ("kbps", 1e3)):
+        if bps >= div:
+            return f"{bps/div:,.2f} {unit}"
+    return f"{bps:,.0f} bps"
+
+def _fmt_delta(pct: float | None) -> str:
+    if pct is None:
+        return "new"
+    sign = "+" if pct >= 0 else ""
+    return f"{sign}{pct:.1f}%"
+
+def _fmt_breakdown(items: list) -> str:
+    if not items:
+        return "—"
+    parts = []
+    for it in items:
+        value = it.value
+        share = it.share_pct
+        delta = it.delta_pct
+        tag = " (new)" if delta is None else f" ({_fmt_delta(delta)})"
+        parts.append(f"{value} {share:.0f}%{tag}")
+    return ", ".join(parts)
+
+def _print_peak(peak, breakdown) -> None:
+    pid = peak.peak_id
+    start = peak.start_ts
+    end = peak.end_ts
+    bps = peak.total_bps
+    pps = peak.total_pps
+    
+    dbps = breakdown.total_bps_delta_pct if breakdown else None
+    dpps = breakdown.total_pps_delta_pct if breakdown else None
+
+    print(f"  ┌─ {pid}")
+    print(f"  │  window   {start}  →  {end}")
+    print(f"  │  rate     {_fmt_bps(bps):>14}   |   {pps:,.0f} pps")
+    print(f"  │  vs base  BPS {_fmt_delta(dbps):>8}   |   PPS {_fmt_delta(dpps):>8}")
+    if breakdown:
+        print(f"  │  by SC    {_fmt_breakdown(breakdown.by_sc)}")
+        print(f"  │  by proto {_fmt_breakdown(breakdown.by_protocol)}")
+        print(f"  │  by port  {_fmt_breakdown(breakdown.by_dst_port)}")
+        print(f"  │  by ether {_fmt_breakdown(breakdown.by_ethernet_type)}")
+    print(f"  └{'─' * 60}")
+
+def _print_peak_table(title: str, peaks: list, breakdowns: dict) -> None:
+    print(f"\n  {title}")
+    print(f"  {'─' * 60}")
+    if not peaks:
+        print("    (none)")
+        return
+    for p in peaks:
+        bd = breakdowns.get(p.peak_id) if breakdowns else None
+        _print_peak(p, bd)
+
 def _print_snapshot(snapshot) -> None:
-    """Pretty-print a TrafficSnapshot to the console."""
-    print(f"\n{'═' * 80}")
-    print(f"  Traffic Snapshot for {snapshot.detection_target}")
-    print(f"  Scrub Centers: {', '.join(snapshot.scrub_centers) or '(all)'}")
-    print(f"{'═' * 80}")
+    target = snapshot.detection_target
+    scs = snapshot.scrub_centers or []
+    sc_label = ", ".join(scs) if scs else "(all)"
+    baseline = snapshot.baseline
+    breakdowns = snapshot.peak_breakdowns or {}
 
-    # ── Baseline ──
-    if snapshot.baseline:
-        b = snapshot.baseline
-        print(f"\n{'─' * 40}")
-        print(f"  6-Day Baseline ({b.num_days} day(s))")
-        print(f"{'─' * 40}")
-        print(f"  Avg BPS: {b.baseline_bps:>15,.0f}  ({b.baseline_bps / 1e6:.2f} Mbps)")
-        print(f"  Avg PPS: {b.baseline_pps:>15,.0f}")
+    bar = "═" * 70
+    print(f"\n{bar}")
+    print(f"  TRAFFIC SNAPSHOT  —  {target}")
+    print(f"  scrub centers: {sc_label}")
+    print(bar)
 
-        if b.protocol_shares:
-            print("\n  Protocol mix (by bytes):")
-            for proto, share in sorted(b.protocol_shares.items(), key=lambda x: -x[1]):
-                print(f"    {proto:<12} {share * 100:>6.1f}%")
+    # ── baseline section ──
+    if baseline:
+        n_days = baseline.num_days
+        print(f"\n  BASELINE  ({n_days}-day average)")
+        print(f"  {'─' * 60}")
+        bbps = baseline.baseline_bps
+        bpps = baseline.baseline_pps
+        print(f"    avg rate   {_fmt_bps(bbps):>14}   |   {bpps:,.0f} pps")
 
-        if b.dst_port_shares:
-            top_ports = sorted(b.dst_port_shares.items(), key=lambda x: -x[1])[:10]
-            print("\n  Top dst ports (by bytes):")
-            for port, share in top_ports:
-                print(f"    {port:<12} {share * 100:>6.1f}%")
+        proto = baseline.protocol_shares or {}
+        if proto:
+            mix = ", ".join(f"{k} {v*100:.0f}%" for k, v in proto.items())
+            print(f"    protocols  {mix}")
+        ports = baseline.dst_port_shares or {}
+        if ports:
+            mix = ", ".join(f"{k} {v*100:.0f}%" for k, v in ports.items())
+            print(f"    dst ports  {mix}")
     else:
-        print("\n  ⚠ No baseline available (Cassandra unreachable or no data)")
+        print("\n  ⚠ No baseline available")
 
-    # ── Peaks ──
-    for metric_label, peaks_dict in [("BPS", snapshot.bps_peaks), ("PPS", snapshot.pps_peaks)]:
-        for scope, peaks in peaks_dict.items():
-            print(f"\n{'─' * 40}")
-            print(f"  Top {metric_label} Peaks — scope: {scope}")
-            print(f"{'─' * 40}")
+    # ── peaks by scope ──
+    peaks_bps = snapshot.bps_peaks or {}
+    peaks_pps = snapshot.pps_peaks or {}
+    scopes = sorted(set(peaks_bps) | set(peaks_pps))
 
-            if not peaks:
-                print("  (no peaks detected)")
-                continue
+    for scope in scopes:
+        print(f"\n{'─' * 70}")
+        print(f"  SCOPE: {scope}")
+        print(f"{'─' * 70}")
+        _print_peak_table(
+            f"Top BPS peaks",
+            peaks_bps.get(scope, []), breakdowns,
+        )
+        _print_peak_table(
+            f"Top PPS peaks",
+            peaks_pps.get(scope, []), breakdowns,
+        )
 
-            print(f"  {'ID':<22} {'Start':<22} {'End':<22} {'BPS':>15} {'PPS':>15}")
-            print(f"  {'─' * 96}")
-
-            for p in peaks:
-                print(
-                    f"  {p.peak_id:<22} "
-                    f"{str(p.start_ts):<22} "
-                    f"{str(p.end_ts):<22} "
-                    f"{p.total_bps:>15,.0f} "
-                    f"{p.total_pps:>15,.0f}"
-                )
-
-                # Show breakdown if available
-                bd = snapshot.peak_breakdowns.get(p.peak_id)
-                if bd:
-                    if bd.total_bps_delta_pct is not None:
-                        print(f"    Δ BPS vs baseline: {bd.total_bps_delta_pct:>+.1f}%")
-                    if bd.total_pps_delta_pct is not None:
-                        print(f"    Δ PPS vs baseline: {bd.total_pps_delta_pct:>+.1f}%")
-
-                    if bd.by_protocol:
-                        print("    Protocols:", end="")
-                        for e in bd.by_protocol[:5]:
-                            delta_str = f" (Δ{e.delta_pct:>+.0f}%)" if e.delta_pct is not None else " (new)"
-                            print(f"  {e.value} {e.share_pct:.0f}%{delta_str}", end="")
-                        print()
-
-                    if bd.by_dst_port:
-                        print("    Top ports:", end="")
-                        for e in bd.by_dst_port[:5]:
-                            delta_str = f" (Δ{e.delta_pct:>+.0f}%)" if e.delta_pct is not None else " (new)"
-                            print(f"  {e.value} {e.share_pct:.0f}%{delta_str}", end="")
-                        print()
-
-            print(f"\n  ✓ {len(peaks)} {metric_label} peak(s) found for '{scope}'")
-
-    print(f"\n{'═' * 80}\n")
+    print(f"\n{bar}\n")
 
 
 def main():
     """Run the traffic analysis agent."""
+    quiet_logs()
     # Default inputs — override via command-line or future API
     target = sys.argv[1] if len(sys.argv) > 1 else "192.0.2.10"
     scrub_centers = sys.argv[2].split(",") if len(sys.argv) > 2 else []

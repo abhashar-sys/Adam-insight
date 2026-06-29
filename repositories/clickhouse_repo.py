@@ -135,11 +135,11 @@ WHERE {target_filter}
 GROUP BY bucket
 ORDER BY bucket WITH FILL
     FROM toStartOfInterval(
-        toDateTime(intDiv((SELECT start_ns FROM range), 1000000000)),
+        toDateTime(intDiv(coalesce((SELECT start_ns FROM range), 0), 1000000000)),
         INTERVAL 10 SECOND
     )
     TO toStartOfInterval(
-        toDateTime(intDiv((SELECT end_ns FROM range), 1000000000)),
+        toDateTime(intDiv(coalesce((SELECT end_ns FROM range), 0), 1000000000)),
         INTERVAL 10 SECOND
     )
     STEP toIntervalSecond(10)"""

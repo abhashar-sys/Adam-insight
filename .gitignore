@@ -37,6 +37,7 @@ htmlcov/
 test_on_csv.py
 plot_peaks.py
 presentation_demo.py
+run_local_test.py
 *_peaks.png
 *_peaks_presentation.png
 137.201.203.43*
