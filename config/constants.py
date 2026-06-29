@@ -1,7 +1,10 @@
 # ── Peak-detection constants ─────────────────────────────────────
 TUKEY_FENCE = 1.5
 FALLBACK_PERCENTILE = 95
-MIN_GAP_MINUTES = 2
+BUCKET_SECONDS = 10             # 10-second aggregation buckets
+MIN_GAP_BUCKETS = 12            # ~2 minutes at 10s buckets
 TOP_N = 5
-BUCKET_MINUTES = 1
-TARGET_IP = "100.84.137.181"
+
+# ── Baseline constants ───────────────────────────────────────────
+TRAILING_BASELINE_DAYS = 6
+SECONDS_PER_DAY = 86_400

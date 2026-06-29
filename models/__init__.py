@@ -2,28 +2,31 @@
 Data models for sFlow traffic analysis.
 
 Classes:
-    - TrafficQueryInput: Input parameters
-    - TrafficQueryOutput: Query results
-    - MinuteBucket: 1-minute traffic summary
-    - L2Breakdown: Layer 2 (EtherType) breakdown
-    - L3Breakdown: Layer 3 (Protocol) breakdown
-    - L4Breakdown: Layer 4 (Port) breakdown
+    - SflowTelemetry: Full sFlow record schema (ClickHouse row model)
+    - PeakWindow: A single detected traffic peak
+    - BreakdownEntry: One row in a peak breakdown
+    - PeakBreakdown: Full decomposition of a peak across dimensions
+    - PooledBaseline: 6-day pooled baseline rates and shares
+    - TrafficSnapshot: Final assembled output
+    - TrafficIntelState: LangGraph agent state
 """
 
 from models.traffic_analysis import (
-    TrafficQueryInput,
-    TrafficQueryOutput,
-    MinuteBucket,
-    L2Breakdown,
-    L3Breakdown,
-    L4Breakdown,
+    SflowTelemetry,
+    PeakWindow,
+    BreakdownEntry,
+    PeakBreakdown,
+    PooledBaseline,
+    TrafficSnapshot,
+    TrafficIntelState,
 )
 
 __all__ = [
-    'TrafficQueryInput',
-    'TrafficQueryOutput',
-    'MinuteBucket',
-    'L2Breakdown',
-    'L3Breakdown',
-    'L4Breakdown',
+    'SflowTelemetry',
+    'PeakWindow',
+    'BreakdownEntry',
+    'PeakBreakdown',
+    'PooledBaseline',
+    'TrafficSnapshot',
+    'TrafficIntelState',
 ]

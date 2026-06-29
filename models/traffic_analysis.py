@@ -1,10 +1,18 @@
+from __future__ import annotations
+
 from pydantic import BaseModel, Field  # type: ignore[import]
 from typing import List, Optional
+from typing_extensions import TypedDict
 from datetime import datetime
+
+
+# ═══════════════════════════════════════════════════════════════════
+# sFlow Telemetry (ClickHouse row model)
+# ═══════════════════════════════════════════════════════════════════
 
 class SflowTelemetry(BaseModel):
     """Pydantic data model mapping the owl_bronze.sflowsPremit and sflowsPostmit ClickHouse schema."""
-    
+
     # --- Core Timestamps & Identifiers ---
     # Timestamp the packet was received by the collector in nanoseconds (UInt64)
     time_received_ns: int
@@ -14,7 +22,7 @@ class SflowTelemetry(BaseModel):
     sampling_rate: int
     # IP address of the device/router generating the sFlow records (String)
     sampler_address: str
-    
+
     # --- L2 (Data Link Layer) ---
     # Total length of the frame in bytes (UInt32)
     frame_length: int
@@ -26,7 +34,7 @@ class SflowTelemetry(BaseModel):
     ethernet_type: str
     # Length of the Ethernet header in bytes (UInt16)
     ethernet_length: int
-    
+
     # --- L3 (Network Layer) ---
     # Source IP address (String)
     src_addr: str
@@ -52,7 +60,7 @@ class SflowTelemetry(BaseModel):
     more_fragments: int
     # Human-readable protocol name matching ip_proto_no (LowCardinality String)
     protocol: str
-    
+
     # --- L4 (Transport Layer) ---
     # Length of UDP header in bytes (UInt16)
     udp_header_len: int
@@ -72,7 +80,7 @@ class SflowTelemetry(BaseModel):
     tcp_flags: List[int] = Field(default_factory=list)
     # List of human-readable TCP flags (e.g., ['SYN', 'ACK']) (Array of String)
     tcp_flags_named: List[str] = Field(default_factory=list)
-    
+
     # --- ICMP Fields ---
     # ICMP message type (UInt8)
     icmp_type: int
@@ -84,7 +92,7 @@ class SflowTelemetry(BaseModel):
     icmp_id: int
     # ICMP Sequence number (UInt16)
     icmp_seq: int
-    
+
     # --- Payload & Interfaces ---
     # Hex representation or snippet of the packet payload (String)
     payload: str
@@ -92,7 +100,7 @@ class SflowTelemetry(BaseModel):
     in_if: int
     # SNMP ifIndex of the output interface (UInt32)
     out_if: int
-    
+
     # --- Encapsulation & Decoded Stacks ---
     # List of parsed layer protocols (e.g., ['Ethernet', 'IPv4', 'TCP']) (Array of String)
     layer_stack: List[str]
@@ -102,14 +110,14 @@ class SflowTelemetry(BaseModel):
     vlan_id: int = 0
     # Boolean flag indicating if this packet is an IP fragment (Bool)
     is_fragment: bool = False
-    
+
     # --- DNS Specifics ---
     # Parsed DNS answers, questions, authorities, and additionals (Arrays of String)
     dns_answers: List[str] = Field(default_factory=list)
     dns_questions: List[str] = Field(default_factory=list)
     dns_authorities: List[str] = Field(default_factory=list)
     dns_additionals: List[str] = Field(default_factory=list)
-    
+
     # --- ESP/GRE Tunnels ---
     # Encapsulating Security Payload (ESP) and Generic Routing Encapsulation (GRE) decodes
     esp_seq: int = 0
@@ -130,11 +138,11 @@ class SflowTelemetry(BaseModel):
     gre_recursion_control: int = 0
     gre_flags: int = 0
     gre_offset: int = 0
-    
+
     # --- Database Metadata ---
     # Time the row was inserted into the ClickHouse materialized view (DateTime)
     time_inserted: Optional[datetime] = None
-    
+
     # --- BGP ASN & Geo-Enrichment ---
     # Autonomous System Number (ASN) of the source and destination (UInt32)
     src_asn: int = 0
@@ -151,3 +159,88 @@ class SflowTelemetry(BaseModel):
     dst_city: str = ""
     dst_country: str = ""
     dst_continent: str = ""
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Agent State — Typed Classes
+# ═══════════════════════════════════════════════════════════════════
+
+class PeakWindow(BaseModel):
+    """A single detected traffic peak."""
+    peak_id: str                  # e.g. "overall_bps_1", "lon_pps_3"
+    scope: str                    # "overall" or SC name
+    metric: str                   # "bps" or "pps"
+    start_ts: datetime
+    end_ts: datetime
+    total_bps: float
+    total_pps: float
+
+
+class BreakdownEntry(BaseModel):
+    """One row in a peak breakdown."""
+    value: str                    # e.g. "TCP", "443", "lon"
+    bps: float = 0.0
+    pps: float = 0.0
+    share_pct: float = 0.0       # % of total in this peak
+    baseline_share_pct: float | None = None
+    delta_pct: float | None = None  # % change vs baseline; None = "new"
+
+
+class PeakBreakdown(BaseModel):
+    """Full decomposition of a single peak across four dimensions."""
+    peak_id: str
+    overall_bps: float = 0.0
+    overall_pps: float = 0.0
+    total_bps_delta_pct: float | None = None
+    total_pps_delta_pct: float | None = None
+    by_sc: list[BreakdownEntry] = Field(default_factory=list)
+    by_ethernet_type: list[BreakdownEntry] = Field(default_factory=list)
+    by_protocol: list[BreakdownEntry] = Field(default_factory=list)
+    by_dst_port: list[BreakdownEntry] = Field(default_factory=list)
+
+
+class PooledBaseline(BaseModel):
+    """6-day pooled baseline rates and per-dimension shares."""
+    total_bytes: float = 0.0
+    total_packets: float = 0.0
+    num_days: int = 0
+    baseline_bps: float = 0.0
+    baseline_pps: float = 0.0
+    protocol_shares: dict[str, float] = Field(default_factory=dict)   # lowercased protocol → share
+    dst_port_shares: dict[str, float] = Field(default_factory=dict)   # port string → share
+    sc_shares: dict[str, float] = Field(default_factory=dict)         # sc_name → share
+    raw_profiles: list[dict] = Field(default_factory=list)
+
+
+class TrafficSnapshot(BaseModel):
+    """Final output: all views + per-peak fields, ready to render."""
+    detection_target: str
+    scrub_centers: list[str] = Field(default_factory=list)
+    baseline: PooledBaseline | None = None
+    bps_peaks: dict[str, list[PeakWindow]] = Field(default_factory=dict)  # scope → peaks
+    pps_peaks: dict[str, list[PeakWindow]] = Field(default_factory=dict)
+    peak_breakdowns: dict[str, PeakBreakdown] = Field(default_factory=dict)
+
+
+class TrafficIntelState(TypedDict, total=False):
+    """LangGraph state for the traffic analysis agent."""
+    # Inputs
+    detection_target: str
+    scrub_centers: list[str]
+
+    # Resolution
+    device_ips: dict[str, list[str]]       # sc_name → [sampler_address, ...]
+
+    # Baseline (Cassandra, 6 trailing days)
+    baseline: PooledBaseline | None
+
+    # Live peaks (ClickHouse, last 1 hour)
+    # Keyed by scope: "overall" + each SC name
+    peaks_bps: dict[str, list[PeakWindow]]
+    peaks_pps: dict[str, list[PeakWindow]]
+
+    # Per-peak decomposition
+    peak_breakdowns: dict[str, PeakBreakdown]  # keyed by peak_id
+
+    # Final output
+    output: TrafficSnapshot | None
