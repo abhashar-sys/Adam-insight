@@ -80,7 +80,12 @@ def get_customers() -> list[Customer]:
     with _build_customer_client() as client:
         r = client.get("/customers/v1/customers", params={"includeIPv6":True})
         r.raise_for_status()
-        return [Customer(**item) for item in r.json()]
+        customers = []
+        for item in r.json():
+            item["networks"] = item.get("networks") or []
+            item["vips"] = item.get("vips") or []
+            customers.append(Customer(**item))
+        return customers
 
 def get_attack_events(customer_name:str,time_min:str,time_max:str) -> list[AttackEvent]:
     with _build_chakra_client() as client:

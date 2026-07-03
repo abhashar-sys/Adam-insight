@@ -8,13 +8,13 @@ def _parse_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser(description="Run customer-context demo")
 	parser.add_argument(
 		"--network",
-		default="193.203.230.149/32",
+		default="141.92.164.1/32",
 		help="Target network CIDR to look up",
 	)
 	parser.add_argument(
 		"--locations",
 		nargs="+",
-		default=["fll1", "ips9"],
+		default=["ams5"],
 		help="Requested locations",
 	)
 	return parser.parse_args()

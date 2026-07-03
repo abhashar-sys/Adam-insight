@@ -4,6 +4,8 @@ from services.api_client import get_customers
 def _matches_network(target_net,cidr:str) ->bool:
     try:
         candidate_net=ip_network(cidr,strict=False)
+        if target_net.version != candidate_net.version:
+            return False
         return target_net.subnet_of(candidate_net)
     except ValueError:
         return False

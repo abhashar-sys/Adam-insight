@@ -31,6 +31,8 @@ def _find_best_match(target_net,items):
                 if not candidate_source:
                     continue
                 candidate_net=ip_network(candidate_source,strict=False)
+                if target_net.version != candidate_net.version:
+                    continue
                 if not target_net.subnet_of(candidate_net):
                     continue
                 prefix_len=candidate_net.prefixlen
