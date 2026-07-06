@@ -1,26 +1,41 @@
-from typing import Literal
+"""Customer Context Agent — FastAPI service.
 
-from fastapi import FastAPI, HTTPException
+Called by the orchestrator at:
+    POST /nodes/customer-context
+
+Input  matches  CustomerContextInput  in orchestrator-service/app.py.
+Output wraps CustomerContextOutputModel in the standard UnifiedEnvelope.
+"""
+from __future__ import annotations
+
+import time
+import uuid
+from typing import Any, Dict, List, Literal, Optional, Union
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from graph import build_graph
 from nodes.customer_context_node import customer_context_node
 
 
+# ── Agent-internal models (unchanged) ────────────────────────────────────────
+
 class InvokeRequest(BaseModel):
     network: str = Field(..., description="Target network CIDR")
-    locations: list[str] = Field(default_factory=list, description="Requested locations")
+    locations: List[str] = Field(default_factory=list, description="Requested locations")
 
 
 class MitigationFunctionOutputModel(BaseModel):
-    function: str | None = None
-    config: dict | None = None
+    function: Optional[str] = None
+    config: Optional[dict] = None
 
 
 class MitigationLocationOutputModel(BaseModel):
     location: str
     isSuppressed: bool
-    functions: list[MitigationFunctionOutputModel]
+    functions: List[MitigationFunctionOutputModel]
 
 
 class MitigationSuccessOutputModel(BaseModel):
@@ -37,27 +52,27 @@ class MitigationErrorOutputModel(BaseModel):
 
 
 class CustomerMatchModel(BaseModel):
-    customer: str | None = None
-    account_id: str | None = None
-    account_name: str | None = None
-    matched_cidr: str | None = None
+    customer: Optional[str] = None
+    account_id: Optional[str] = None
+    account_name: Optional[str] = None
+    matched_cidr: Optional[str] = None
 
 
 class CustomersOutputModel(BaseModel):
-    error: str | None = None
-    matches: list[CustomerMatchModel] = Field(default_factory=list)
+    error: Optional[str] = None
+    matches: List[CustomerMatchModel] = Field(default_factory=list)
 
 
 class ChakraRsErrorsOutputModel(BaseModel):
-    active_attacks_error: str | None = None
-    attack_events_error: str | None = None
+    active_attacks_error: Optional[str] = None
+    attack_events_error: Optional[str] = None
 
 
 class RecurrenceOutputModel(BaseModel):
     total_attacks: int
-    average_gap_days: float | None = None
-    longest_quiet_period_days: float | None = None
-    shortest_gap_days: float | None = None
+    average_gap_days: Optional[float] = None
+    longest_quiet_period_days: Optional[float] = None
+    shortest_gap_days: Optional[float] = None
 
 
 class DominantVectorOutputModel(BaseModel):
@@ -67,85 +82,95 @@ class DominantVectorOutputModel(BaseModel):
 
 
 class VectorsOutputModel(BaseModel):
-    dominant_vectors: list[DominantVectorOutputModel] = Field(default_factory=list)
+    dominant_vectors: List[DominantVectorOutputModel] = Field(default_factory=list)
     vector_diversity: int
 
 
 class MagnitudeOutputModel(BaseModel):
-    max_peak_bps: int | None = None
-    average_peak_bps: float | None = None
-    max_peak_pps: int | None = None
-    largest_attack_recent: bool | None = None
+    max_peak_bps: Optional[int] = None
+    average_peak_bps: Optional[float] = None
+    max_peak_pps: Optional[int] = None
+    largest_attack_recent: Optional[bool] = None
 
 
 class MitigationEffectivenessOutputModel(BaseModel):
-    success_rate_percent: float | None = None
+    success_rate_percent: Optional[float] = None
     successful_count: int
     failed_count: int
     unknown_outcome_count: int
-    recurring_unmitigated_vectors: list[str] = Field(default_factory=list)
+    recurring_unmitigated_vectors: List[str] = Field(default_factory=list)
 
 
 class DurationOutputModel(BaseModel):
-    average_duration_hours: float | None = None
-    longest_duration_hours: float | None = None
+    average_duration_hours: Optional[float] = None
+    longest_duration_hours: Optional[float] = None
     ongoing_count: int
 
 
 class HistoricalPatternOutputModel(BaseModel):
     summary: str
-    recurrence: RecurrenceOutputModel | None = None
-    vectors: VectorsOutputModel | None = None
-    magnitude: MagnitudeOutputModel | None = None
-    mitigation_effectiveness: MitigationEffectivenessOutputModel | None = None
-    duration: DurationOutputModel | None = None
+    recurrence: Optional[RecurrenceOutputModel] = None
+    vectors: Optional[VectorsOutputModel] = None
+    magnitude: Optional[MagnitudeOutputModel] = None
+    mitigation_effectiveness: Optional[MitigationEffectivenessOutputModel] = None
+    duration: Optional[DurationOutputModel] = None
 
 
 class AttackEventOutputModel(BaseModel):
     event_id: int
     attack_id: int
     start_time: str
-    end_time: str | None = None
-    attack_vectors: list[str] = Field(default_factory=list)
-    agr_peak_bps: int | None = None
-    agr_peak_pps: int | None = None
+    end_time: Optional[str] = None
+    attack_vectors: List[str] = Field(default_factory=list)
+    agr_peak_bps: Optional[int] = None
+    agr_peak_pps: Optional[int] = None
     is_active_attack: bool
-    mitigation_successful: bool | None = None
-    non_mitigated_vectors: list[str | None] = Field(default_factory=list)
+    mitigation_successful: Optional[bool] = None
+    non_mitigated_vectors: List[Optional[str]] = Field(default_factory=list)
 
 
 class AttackReportSuccessOutputModel(BaseModel):
     customer_name: str
-    kept_events: list[AttackEventOutputModel] = Field(default_factory=list)
+    kept_events: List[AttackEventOutputModel] = Field(default_factory=list)
     has_recent_attacks: bool
-    message: str | None = None
+    message: Optional[str] = None
     historical_pattern: HistoricalPatternOutputModel
     chakra_rs_failure: bool
     chakra_rs_errors: ChakraRsErrorsOutputModel
 
 
 class AttackReportFailureOutputModel(BaseModel):
-    customer_id: int | None = None
-    customer_name: str | None = None
+    customer_id: Optional[int] = None
+    customer_name: Optional[str] = None
     chakra_rs_failure: Literal[True]
     chakra_rs_error: str
 
 
 class CustomerContextOutputModel(BaseModel):
-    mitigation: MitigationSuccessOutputModel | MitigationErrorOutputModel | None = None
+    mitigation: Optional[Union[MitigationSuccessOutputModel, MitigationErrorOutputModel]] = None
     customers: CustomersOutputModel
-    attack_reports: list[AttackReportSuccessOutputModel | AttackReportFailureOutputModel] = Field(default_factory=list)
+    attack_reports: List[Union[AttackReportSuccessOutputModel, AttackReportFailureOutputModel]] = Field(default_factory=list)
 
 
-class CustomerContextNodeResponse(BaseModel):
-    customer_context: CustomerContextOutputModel | None
+# ── Envelope Models ───────────────────────────────────────────────────────────
+
+class ErrorBlock(BaseModel):
+    code: str
+    message: str
+    details: Optional[Dict[str, Any]] = None
 
 
-class GraphInvokeResponse(BaseModel):
-    network: str
-    locations: list[str]
-    customer_context: CustomerContextOutputModel | None
+class UnifiedEnvelope(BaseModel):
+    request_id: str
+    service: str
+    status: str                          # "success" | "partial" | "error"
+    generated_at_ns: int
+    latency_ms: int
+    error: Optional[ErrorBlock] = None
+    data: Dict[str, Any]
 
+
+# ── App ───────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
     title="Customer Context Agent API",
@@ -153,34 +178,145 @@ app = FastAPI(
     description="HTTP facade for node services and LangGraph execution",
 )
 
-# Compile once and reuse across requests.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Compile the graph once and reuse across requests.
 graph = build_graph()
 
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+# ── Health ────────────────────────────────────────────────────────────────────
+
+@app.get("/health", summary="Health check")
+def health() -> Dict[str, str]:
+    return {"status": "ok", "service": "customer-context"}
 
 
-@app.post("/nodes/customer-context", response_model=CustomerContextNodeResponse)
-def invoke_customer_context_node(payload: InvokeRequest) -> CustomerContextNodeResponse:
-    state = {"network": payload.network, "locations": payload.locations, "customer_context": None}
+# ── Primary orchestrator endpoint ─────────────────────────────────────────────
+
+@app.post(
+    "/nodes/customer-context",
+    response_model=UnifiedEnvelope,
+    summary="Run customer context node (orchestrator contract)",
+)
+def invoke_customer_context_node(payload: InvokeRequest) -> UnifiedEnvelope:
+    """Fetch mitigation, customer matches, and attack reports for a network CIDR.
+
+    Called by the orchestrator with ``network`` and optional ``locations``.
+    Returns the full CustomerContextOutputModel wrapped in UnifiedEnvelope.
+    """
+    request_id = str(uuid.uuid4())
+    t_start = time.time()
+    generated_at_ns = time.time_ns()
+
+    state = {
+        "network": payload.network,
+        "locations": payload.locations,
+        "customer_context": None,
+    }
+
     try:
         result = customer_context_node(state)
-    except Exception as exc:  # pragma: no cover - defensive wrapper
-        raise HTTPException(status_code=500, detail=f"customer_context node failed: {exc}") from exc
-    return CustomerContextNodeResponse(customer_context=result.get("customer_context"))
+        latency_ms = int((time.time() - t_start) * 1000)
+
+        ctx = result.get("customer_context")
+
+        # Determine status
+        if ctx is None:
+            status = "partial"
+            data: Dict[str, Any] = {"customer_context": None}
+        else:
+            ctx_dict = ctx.model_dump() if hasattr(ctx, "model_dump") else ctx
+            has_customers = bool(
+                isinstance(ctx_dict.get("customers"), dict)
+                and ctx_dict["customers"].get("matches")
+            )
+            status = "success" if has_customers else "partial"
+            data = {"customer_context": ctx_dict}
+
+        return UnifiedEnvelope(
+            request_id=request_id,
+            service="customer-context",
+            status=status,
+            generated_at_ns=generated_at_ns,
+            latency_ms=latency_ms,
+            data=data,
+        )
+
+    except Exception as exc:
+        latency_ms = int((time.time() - t_start) * 1000)
+        return UnifiedEnvelope(
+            request_id=request_id,
+            service="customer-context",
+            status="error",
+            generated_at_ns=generated_at_ns,
+            latency_ms=latency_ms,
+            error=ErrorBlock(
+                code="NODE_FAILED",
+                message=str(exc),
+            ),
+            data={},
+        )
 
 
-@app.post("/graph/invoke", response_model=GraphInvokeResponse)
-def invoke_graph(payload: InvokeRequest) -> GraphInvokeResponse:
+# ── Graph invoke (kept for direct testing) ────────────────────────────────────
+
+@app.post(
+    "/graph/invoke",
+    response_model=UnifiedEnvelope,
+    summary="Run full LangGraph pipeline",
+)
+def invoke_graph(payload: InvokeRequest) -> UnifiedEnvelope:
+    """Run the full LangGraph pipeline and return all state fields."""
+    request_id = str(uuid.uuid4())
+    t_start = time.time()
+    generated_at_ns = time.time_ns()
+
     try:
-        result = graph.invoke({"network": payload.network, "locations": payload.locations})
-    except Exception as exc:  # pragma: no cover - defensive wrapper
-        raise HTTPException(status_code=500, detail=f"graph invocation failed: {exc}") from exc
+        result = graph.invoke({
+            "network": payload.network,
+            "locations": payload.locations,
+        })
+        latency_ms = int((time.time() - t_start) * 1000)
 
-    return GraphInvokeResponse(
-        network=result.get("network", payload.network),
-        locations=result.get("locations", payload.locations),
-        customer_context=result.get("customer_context"),
-    )
+        ctx = result.get("customer_context")
+        ctx_dict = ctx.model_dump() if hasattr(ctx, "model_dump") else ctx
+
+        return UnifiedEnvelope(
+            request_id=request_id,
+            service="customer-context",
+            status="success",
+            generated_at_ns=generated_at_ns,
+            latency_ms=latency_ms,
+            data={
+                "network": result.get("network", payload.network),
+                "locations": result.get("locations", payload.locations),
+                "customer_context": ctx_dict,
+            },
+        )
+
+    except Exception as exc:
+        latency_ms = int((time.time() - t_start) * 1000)
+        return UnifiedEnvelope(
+            request_id=request_id,
+            service="customer-context",
+            status="error",
+            generated_at_ns=generated_at_ns,
+            latency_ms=latency_ms,
+            error=ErrorBlock(
+                code="GRAPH_FAILED",
+                message=str(exc),
+            ),
+            data={},
+        )
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app:app", host="0.0.0.0", port=8013, reload=True)
