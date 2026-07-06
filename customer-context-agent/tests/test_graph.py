@@ -100,7 +100,7 @@ class TestBuildGraph:
         mock_attack.return_value = MOCK_ATTACK
 
         result = graph.invoke({"network": SAMPLE_NETWORK, "locations": SAMPLE_LOCATIONS})
-        assert result["customer_context"]["mitigation"]["matched_cidr"] == "10.0.0.0/8"
+        assert result["customer_context"]["mitigation"]["mitigated_network"] == "10.0.0.0/8"
 
     @patch("nodes.customer_context_node.find_attack_context")
     @patch("nodes.customer_context_node.find_customer_context")
@@ -259,7 +259,7 @@ class TestErrorHandling:
         ctx = result["customer_context"]
         
         # LLM should still get mitigation data
-        assert ctx["mitigation"]["matched_cidr"] == "10.0.0.0/8"
+        assert ctx["mitigation"]["mitigated_network"] == "10.0.0.0/8"
         assert ctx["mitigation"]["mitigation_state"] == "ACTIVE"
         # But customer data missing
         assert "error" in ctx["customers"]
@@ -374,10 +374,11 @@ class TestEndToEndFlow:
         # VALIDATION 3: Mitigation section is complete
         assert customer_context["mitigation"] is not None
         mitigation = customer_context["mitigation"]
-        assert mitigation["matched_cidr"] == "10.0.0.0/8"
+        assert mitigation["mitigated_network"] == "10.0.0.0/8"
         assert mitigation["mitigation_state"] == "ACTIVE"
         assert mitigation["event_customer"] == "acme"
-        assert mitigation["account_name"] == "Acme Corp"
+        assert "account_name" not in mitigation
+        assert "account_id" not in mitigation
         assert len(mitigation["locations"]) == 1
         assert mitigation["locations"][0]["location"] == "fll1"
 
@@ -531,7 +532,7 @@ class TestEndToEndFlow:
         ctx = result["customer_context"]
 
         # VALIDATION: Mitigation and customer data still available
-        assert ctx["mitigation"]["matched_cidr"] == "10.0.0.0/8"
+        assert ctx["mitigation"]["mitigated_network"] == "10.0.0.0/8"
         assert len(ctx["customers"]["matches"]) == 1
 
         # VALIDATION: Attack reports contain error for the failed customer

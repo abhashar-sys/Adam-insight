@@ -64,12 +64,10 @@ def _format_mitigation_output(mitigation_result: dict | None, mitigation_error: 
     if not mitigation_result or not mitigation_result.get("matched_cidr"):
         return None
     return {
-        "matched_cidr": mitigation_result.get("matched_cidr"),
+        "mitigated_network": mitigation_result.get("matched_cidr"),
         "event_id": mitigation_result.get("event_id"),
         "event_customer": mitigation_result.get("event_customer"),
         "mitigation_state": mitigation_result.get("mitigation_state"),
-        "account_id": mitigation_result.get("account_id"),
-        "account_name": mitigation_result.get("account_name"),
         "is_auto_mitigation": mitigation_result.get("is_auto_mitigation"),
         "locations": mitigation_result.get("locations", [])
     }

@@ -13,12 +13,10 @@ class MitigationLocationOutput(TypedDict):
 
 
 class MitigationSuccessOutput(TypedDict):
-    matched_cidr: Optional[str]
+    mitigated_network: Optional[str]
     event_id: Optional[str | int]
     event_customer: Optional[str]
     mitigation_state: Optional[str]
-    account_id: Optional[str]
-    account_name: Optional[str]
     is_auto_mitigation: Optional[bool]
     locations: list[MitigationLocationOutput]
 

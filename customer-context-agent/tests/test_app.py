@@ -46,7 +46,7 @@ def test_graph_invoke_endpoint(mock_graph):
         "network": "10.0.1.0/24",
         "locations": ["fll1", "ips9"],
         "customer_context": {
-            "mitigation": {"matched_cidr": "10.0.0.0/8"},
+            "mitigation": {"mitigated_network": "10.0.0.0/8"},
             "customers": {"error": None, "matches": []},
             "attack_reports": [],
         },
@@ -65,4 +65,4 @@ def test_graph_invoke_endpoint(mock_graph):
     body = response.json()
     assert body["network"] == "10.0.1.0/24"
     assert body["locations"] == ["fll1", "ips9"]
-    assert body["customer_context"]["mitigation"]["matched_cidr"] == "10.0.0.0/8"
+    assert body["customer_context"]["mitigation"]["mitigated_network"] == "10.0.0.0/8"

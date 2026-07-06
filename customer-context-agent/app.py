@@ -24,12 +24,10 @@ class MitigationLocationOutputModel(BaseModel):
 
 
 class MitigationSuccessOutputModel(BaseModel):
-    matched_cidr: str | None = None
+    mitigated_network: str | None = None
     event_id: str | int | None = None
     event_customer: str | None = None
     mitigation_state: str | None = None
-    account_id: str | None = None
-    account_name: str | None = None
     is_auto_mitigation: bool | None = None
     locations: list[MitigationLocationOutputModel] = Field(default_factory=list)
 
