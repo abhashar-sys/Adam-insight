@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union,Generic,TypeVar
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -153,21 +153,24 @@ class CustomerContextOutputModel(BaseModel):
 
 
 # ── Envelope Models ───────────────────────────────────────────────────────────
-
+T=TypeVar("T")
 class ErrorBlock(BaseModel):
     code: str
     message: str
     details: Optional[Dict[str, Any]] = None
 
 
-class UnifiedEnvelope(BaseModel):
+class UnifiedEnvelope(BaseModel,Generic[T]):
     request_id: str
     service: str
     status: str                          # "success" | "partial" | "error"
     generated_at_ns: int
     latency_ms: int
     error: Optional[ErrorBlock] = None
-    data: Dict[str, Any]
+    data: T
+
+class NodeResponseData(BaseModel):
+    customer_context: Optional[CustomerContextOutputModel] = None
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -175,7 +178,7 @@ class UnifiedEnvelope(BaseModel):
 app = FastAPI(
     title="Customer Context Agent API",
     version="0.1.0",
-    description="HTTP facade for node services and LangGraph execution",
+    description="Provides customer context information for a given network CIDR and a list of scrub center locations, including mitigation status, customer matches, and attack reports.",
 )
 
 app.add_middleware(
@@ -200,7 +203,7 @@ def health() -> Dict[str, str]:
 
 @app.post(
     "/nodes/customer-context",
-    response_model=UnifiedEnvelope,
+    response_model=UnifiedEnvelope[NodeResponseData],
     summary="Run customer context node (orchestrator contract)",
 )
 def invoke_customer_context_node(payload: InvokeRequest) -> UnifiedEnvelope:

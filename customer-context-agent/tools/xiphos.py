@@ -1,3 +1,4 @@
+from __future__ import annotations
 from ipaddress import ip_network
 from services.api_client import get_mitigation_events
 from models import MitigationItem,MitigationNetworkEntry

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from ipaddress import ip_network
 from datetime import datetime,timedelta,timezone
 from services.api_client import get_customer_attacks, get_attack_events
@@ -198,10 +199,10 @@ def find_attack_context(customer_id:int, customer_name:str, target_network:str)-
     chakra_rs_failure=active_attacks_error is not None or attack_events_error is not None
     return {
         "customer_name":customer_name,
+        "historical_pattern":historical_pattern,
         "kept_events":kept_events,
         "has_recent_attacks":len(kept_events)>0,
         "message":None if kept_events else "No recent attack events targeted this network",
-        "historical_pattern":historical_pattern,
         "chakra_rs_failure":chakra_rs_failure,
         "chakra_rs_errors":{
             "active_attacks_error":active_attacks_error,
