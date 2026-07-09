@@ -1,0 +1,13 @@
+fastapi==0.116.1
+httpx==0.28.1
+langgraph
+pydantic==2.13.4
+python-dotenv==1.2.1
+pytest==9.1.1
+cassandra-driver>=3.29
+clickhouse-connect==1.2.0
+matplotlib==3.11.0
+numpy==2.4.6
+scipy==1.17.1
+uvicorn==0.35.0
+pyyaml
