@@ -1,5 +1,47 @@
-*.iml
-.venv/
-.env
+# ── Python ────────────────────────────────────────────────────────
 __pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ── Virtual environments ─────────────────────────────────────────
+.venv/
+project/
+venv/
+env/
+
+# ── Environment / secrets ────────────────────────────────────────
+.env
+
+# ── IDE / editor ─────────────────────────────────────────────────
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+
+# ── OS ───────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Testing / caching ───────────────────────────────────────────
 .pytest_cache/
+.coverage
+htmlcov/
+
+# ── Local Verification & Data (Ignore for PR) ────────────────────
+test_on_csv.py
+plot_peaks.py
+presentation_demo.py
+run_local_test.py
+*_peaks.png
+*_peaks_presentation.png
+137.201.203.43*
+155.140.48.42*
+195.78.86.135*
+OVERALL_README.html
+OVERALL_README.md
