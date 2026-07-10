@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "adam-insight-customer-context-agent.name" $ }}
+  namespace: {{ $.Values.global.namespace }}
+  annotations:
+    reloader.stakater.com/auto: "true"
+  labels:
+    {{- include "adam-insight-customer-context-agent.labels" $ | nindent 4 }}
+spec:
+  replicas: {{ $.Values.replicas }}
+  selector:
+    matchLabels:
+      {{- include "adam-insight-customer-context-agent.selectorLabels" $ | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+      labels:
+        {{- include "adam-insight-customer-context-agent.selectorLabels" $ | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ $.Chart.Name }}
+          image: {{- if eq $.Values.global.localDevelopment true }} "{{ $.Values.localImage }}"{{- else }} "{{ $.Values.global.imageRegistry }}/adam-insight/adam-insight-customer-context-agent:{{ $.Values.global.imageBuildTag }}"{{- end }}
+          imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
+          
+    
+          
+          ports:
+            - containerPort: {{ .Values.service.port }}
+              protocol: {{ .Values.service.protocol }}
+              name: {{ .Values.service.appProtocol }}
+
+          resources:
+            requests:
+              memory: {{ .Values.resources.requests.memory }}
+              cpu: {{ .Values.resources.requests.cpu }}
+            limits:
+              memory: {{ .Values.resources.limits.memory }}
+              cpu: {{ .Values.resources.limits.cpu }}
+
+          volumeMounts:
+            - name: spock-truststore
+              mountPath: /run/spock-truststore
+            - name: spock-keystore
+              mountPath: /run/spock-keystore
+      volumes:
+        - name: spock-truststore
+          secret:
+            secretName: spock-truststore-spock
+        - name: spock-keystore
+          secret:
+            secretName: spock-keystore-spock

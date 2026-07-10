@@ -45,3 +45,6 @@ run_local_test.py
 195.78.86.135*
 OVERALL_README.html
 OVERALL_README.md
+*.crt
+*.key
+*.pem

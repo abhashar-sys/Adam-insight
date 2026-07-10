@@ -1,0 +1,15 @@
+xiphos:
+  baseUrl: https://control.poc.plx.tn.akamai.com
+
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 0.1
+  limits:
+    memory: 256Mi
+    cpu: 0.1 
+
+service:
+  port: 8013
+  protocol: TCP
+  appProtocol: http

@@ -1,0 +1,5 @@
+global:
+  namespace: adam
+  localDevelopment: true
+  imageRegistry: qa.docker.akamai.com/images
+  imagePullPolicy: Always 

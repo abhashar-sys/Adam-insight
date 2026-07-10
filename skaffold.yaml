@@ -1,0 +1,27 @@
+apiVersion: skaffold/v2beta16
+kind: Config
+metadata:
+  name: adam-dispatcher
+build:
+  artifacts:
+    - image: registry.spock.tn.akamai.com/plx/adam-insight/adam-insight-customer-context-agent
+      context: components/adam-insight-customer-context-agent
+      docker:
+        dockerfile: Dockerfile
+        buildArgs:
+          CTX_PATH: .
+          DOCKER_REGISTRY: docker.io
+  
+profiles:
+# dart poc
+- name: poc
+  deploy:
+    kubeContext: spock-dart-nss1-8
+    helm:
+      releases:
+        - name: adam-insight
+          namespace: adam
+          chartPath: chart
+          setValues:
+            adam-insight-customer-context-agent.localImage: registry.spock.tn.akamai.com/plx/adam-insight/adam-insight-customer-context-agent
+            
