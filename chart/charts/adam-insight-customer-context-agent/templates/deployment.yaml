@@ -23,9 +23,9 @@ spec:
         - name: {{ $.Chart.Name }}
           image: {{- if eq $.Values.global.localDevelopment true }} "{{ $.Values.localImage }}"{{- else }} "{{ $.Values.global.imageRegistry }}/adam-insight/adam-insight-customer-context-agent:{{ $.Values.global.imageBuildTag }}"{{- end }}
           imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
-          
-    
-          
+          envFrom:
+            - configMapRef:
+                name: {{ include "adam-insight-customer-context-agent.fullname" . }}-config
           ports:
             - containerPort: {{ .Values.service.port }}
               protocol: {{ .Values.service.protocol }}
@@ -40,14 +40,32 @@ spec:
               cpu: {{ .Values.resources.limits.cpu }}
 
           volumeMounts:
+            - name: config
+              mountPath: "/configs"
+              readOnly: true
             - name: spock-truststore
               mountPath: /run/spock-truststore
             - name: spock-keystore
               mountPath: /run/spock-keystore
+            - name: spock-ca-cert
+              mountPath: /run/certs/spock-ca
+              readOnly: true
+            - name: spock-tls-cert
+              mountPath: /run/certs/spock-tls
+              readOnly: true
       volumes:
+        - name: config
+          configMap:
+            name: {{ include "adam-insight-customer-context-agent.fullname" . }}-config
         - name: spock-truststore
           secret:
             secretName: spock-truststore-spock
         - name: spock-keystore
           secret:
             secretName: spock-keystore-spock
+        - name: spock-ca-cert
+          secret:
+            secretName: spock-ca-kdc-akamai
+        - name: spock-tls-cert
+          secret:
+            secretName: spock-tls-spock

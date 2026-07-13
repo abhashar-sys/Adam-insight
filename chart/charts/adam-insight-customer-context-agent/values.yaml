@@ -1,5 +1,11 @@
 xiphos:
-  baseUrl: https://control.poc.plx.tn.akamai.com
+  baseUrl: https://xiphos-dev.dart.qa.akamai.com
+
+customerApi:
+  baseUrl: "http://customer-api.dart-api.svc.cluster.local:8081"
+
+chakraRs:
+  baseUrl: "http://attack-reports-rs.dart-api.svc.cluster.local:9001"
 
 resources:
   requests:

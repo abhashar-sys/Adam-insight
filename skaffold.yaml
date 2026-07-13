@@ -1,7 +1,7 @@
 apiVersion: skaffold/v2beta16
 kind: Config
 metadata:
-  name: adam-dispatcher
+  name: adam-insight-customer-context-agent
 build:
   artifacts:
     - image: registry.spock.tn.akamai.com/plx/adam-insight/adam-insight-customer-context-agent

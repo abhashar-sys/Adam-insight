@@ -8,14 +8,40 @@ Output wraps CustomerContextOutputModel in the standard UnifiedEnvelope.
 """
 from __future__ import annotations
 
+import os
 import time
 import uuid
-from typing import Any, Dict, List, Literal, Optional, Union,Generic,TypeVar
+from typing import Any, Dict, List, Literal, Optional, Union, Generic, TypeVar
+
+# ── 1. CRASH-PROOF ENVIRONMENT BOOTSTRAPPER (MUST RUN FIRST) ──────────────────
+CONFIG_FILE_PATH = "/configs/agent-config.env"
+
+if os.path.exists(CONFIG_FILE_PATH):
+    print(f"[INFO] Bootstrapping Environment from {CONFIG_FILE_PATH}...")
+    try:
+        with open(CONFIG_FILE_PATH, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                delimiter = ":" if ":" in line else "="
+                parts = line.split(delimiter, 1)
+                if len(parts) == 2:
+                    key = parts[0].strip()
+                    value = parts[1].strip().strip('"').strip("'")
+                    os.environ[key] = value
+        print("[INFO] Environment bootstrapped successfully into memory.")
+    except Exception as e:
+        print(f"[ERROR] Critical failure bootstrapping config: {str(e)}")
+else:
+    print(f"[WARNING] Config file not found at {CONFIG_FILE_PATH}. Using fallback env.")
+# ──────────────────────────────────────────────────────────────────────────────
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+# Core application imports now load with populated environment states
 from customer_context.graph import build_graph
 from customer_context.nodes.customer_context_node import customer_context_node
 
@@ -153,14 +179,14 @@ class CustomerContextOutputModel(BaseModel):
 
 
 # ── Envelope Models ───────────────────────────────────────────────────────────
-T=TypeVar("T")
+T = TypeVar("T")
 class ErrorBlock(BaseModel):
     code: str
     message: str
     details: Optional[Dict[str, Any]] = None
 
 
-class UnifiedEnvelope(BaseModel,Generic[T]):
+class UnifiedEnvelope(BaseModel, Generic[T]):
     request_id: str
     service: str
     status: str                          # "success" | "partial" | "error"
@@ -173,7 +199,7 @@ class NodeResponseData(BaseModel):
     customer_context: Optional[CustomerContextOutputModel] = None
 
 
-# ── App ───────────────────────────────────────────────────────────────────────
+# ── App Definition ────────────────────────────────────────────────────────────
 
 app = FastAPI(
     title="Customer Context Agent API",
@@ -207,11 +233,7 @@ def health() -> Dict[str, str]:
     summary="Run customer context node (orchestrator contract)",
 )
 def invoke_customer_context_node(payload: InvokeRequest) -> UnifiedEnvelope:
-    """Fetch mitigation, customer matches, and attack reports for a network CIDR.
-
-    Called by the orchestrator with ``network`` and optional ``locations``.
-    Returns the full CustomerContextOutputModel wrapped in UnifiedEnvelope.
-    """
+    """Fetch mitigation, customer matches, and attack reports for a network CIDR."""
     request_id = str(uuid.uuid4())
     t_start = time.time()
     generated_at_ns = time.time_ns()
@@ -228,7 +250,6 @@ def invoke_customer_context_node(payload: InvokeRequest) -> UnifiedEnvelope:
 
         ctx = result.get("customer_context")
 
-        # Determine status
         if ctx is None:
             status = "partial"
             data: Dict[str, Any] = {"customer_context": None}
@@ -322,4 +343,5 @@ def invoke_graph(payload: InvokeRequest) -> UnifiedEnvelope:
 
 if __name__ == "__main__":
     import uvicorn
+    # Make sure this string matches the actual name of your file (e.g., 'main:app' or 'app:app')
     uvicorn.run("app:app", host="0.0.0.0", port=8013, reload=True)
