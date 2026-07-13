@@ -95,7 +95,6 @@ def _build_chakra_client() -> httpx.Client:
 def get_mitigation_events() -> MitigationResponse:
     with _build_xiphos_client() as client:
         r = client.get("/xiphos/api/2.2/mitigation/events", params={"withDeviceReports": False})
-        print(r.text)
         r.raise_for_status()
         return MitigationResponse(**r.json())
 
@@ -103,7 +102,6 @@ def get_mitigation_events() -> MitigationResponse:
 def get_customers() -> list[Customer]:
     with _build_customer_client() as client:
         r = client.get("/customers/v1/customers", params={"includeIPv6": True})
-        print(r.text)
         r.raise_for_status()
         customers = []
         for item in r.json():
@@ -123,7 +121,6 @@ def get_attack_events(customer_name: str, time_min: str, time_max: str) -> list[
                 "timeMax": time_max,
             }
         )
-        print(r.text)
         r.raise_for_status()
         return [AttackEvent(**item) for item in r.json()]
 
@@ -131,6 +128,5 @@ def get_attack_events(customer_name: str, time_min: str, time_max: str) -> list[
 def get_customer_attacks(customer_id: int) -> list[SingleAttack]:
     with _build_chakra_client() as client:
         r = client.get(f"/chakra-rs/v1/customers/{customer_id}/attacks", params={"isActive": True})
-        print(r.text)
         r.raise_for_status()
         return [SingleAttack(**item) for item in r.json()]
