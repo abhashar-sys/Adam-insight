@@ -12,13 +12,13 @@ Writes: updates ``peak_breakdowns`` with delta fields populated
 
 import logging
 
-from models.traffic_analysis import (
+from traffic_intel_agent.models.traffic_analysis import (
     PeakBreakdown,
     PeakWindow,
     PooledBaseline,
     TrafficIntelState,
 )
-from services.delta_calculator import DeltaCalculator
+from traffic_intel_agent.services.delta_calculator import DeltaCalculator
 
 logger = logging.getLogger(__name__)
 

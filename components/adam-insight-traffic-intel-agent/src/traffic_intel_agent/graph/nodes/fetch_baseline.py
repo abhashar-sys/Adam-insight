@@ -6,9 +6,9 @@ Writes: ``baseline``  (PooledBaseline)
 
 import logging
 
-from models.traffic_analysis import TrafficIntelState
-from repositories.cassandra_repo import CassandraRepository
-from services.baseline_pooler import pool_baseline
+from traffic_intel_agent.models.traffic_analysis import TrafficIntelState
+from traffic_intel_agent.repositories.cassandra_repo import CassandraRepository
+from traffic_intel_agent.services.baseline_pooler import pool_baseline
 
 logger = logging.getLogger(__name__)
 

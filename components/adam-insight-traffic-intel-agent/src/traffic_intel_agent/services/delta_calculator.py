@@ -11,7 +11,7 @@ Edge cases:
     - Baseline rate is 0:    total delta = None
 """
 
-from models.traffic_analysis import (
+from traffic_intel_agent.models.traffic_analysis import (
     BreakdownEntry,
     PeakBreakdown,
     PeakWindow,

@@ -11,7 +11,7 @@ Classes:
     - TrafficIntelState: LangGraph agent state
 """
 
-from models.traffic_analysis import (
+from traffic_intel_agent.models.traffic_analysis import (
     SflowTelemetry,
     PeakWindow,
     BreakdownEntry,

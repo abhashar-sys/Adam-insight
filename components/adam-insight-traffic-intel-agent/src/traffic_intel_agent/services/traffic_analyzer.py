@@ -8,11 +8,11 @@ PeakDecomposer — decomposes each peak into multi-dimensional views via ClickHo
 import numpy as np
 from datetime import timedelta
 
-from config.constants import (
+from traffic_intel_agent.config.constants import (
     MIN_GAP_BUCKETS, TOP_N, BUCKET_SECONDS,
     TUKEY_FENCE, FALLBACK_PERCENTILE,
 )
-from models.traffic_analysis import PeakWindow
+from traffic_intel_agent.models.traffic_analysis import PeakWindow
 # pyrefly: ignore [missing-import]
 from scipy.signal import find_peaks, peak_widths  # noqa: E402
 

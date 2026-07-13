@@ -24,19 +24,19 @@ from langgraph.graph import StateGraph, START, END
 # pyrefly: ignore [missing-import]
 from langgraph.constants import Send
 
-from models.traffic_analysis import (
+from traffic_intel_agent.models.traffic_analysis import (
     PeakBreakdown,
     PeakWindow,
     PooledBaseline,
     TrafficIntelState,
     TrafficSnapshot,
 )
-from graph.nodes.resolve_scrub_centers import resolve_scrub_centers
-from graph.nodes.fetch_baseline import fetch_baseline
-from graph.nodes.traffic_analysis import find_peaks
-from graph.nodes.decompose_peak import decompose_peak
-from graph.nodes.compute_deltas import compute_deltas
-from graph.nodes.format_output import format_output
+from traffic_intel_agent.graph.nodes.resolve_scrub_centers import resolve_scrub_centers
+from traffic_intel_agent.graph.nodes.fetch_baseline import fetch_baseline
+from traffic_intel_agent.graph.nodes.traffic_analysis import find_peaks
+from traffic_intel_agent.graph.nodes.decompose_peak import decompose_peak
+from traffic_intel_agent.graph.nodes.compute_deltas import compute_deltas
+from traffic_intel_agent.graph.nodes.format_output import format_output
 
 logger = logging.getLogger(__name__)
 

@@ -1,0 +1,266 @@
+openapi: 3.0.3
+info:
+  title: Adam Insight API
+  description: Python-based DDoS traffic analysis API that analyzes sFlow telemetry and Cassandra baselines using LangGraph.
+  version: 1.0.0
+paths:
+  /api/v1/analyze-traffic:
+    post:
+      summary: Generates a traffic snapshot for a detection target to identify DDoS anomalies.
+      operationId: analyzeTraffic
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrafficAnalysisRequest'
+      responses:
+        '200':
+          description: Traffic snapshot generated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrafficSnapshot'
+              example:
+                baseline:
+                  total_bps: 12500000
+                  total_pps: 2500
+                  protocol_shares:
+                    tcp: 0.85
+                    udp: 0.12
+                    icmp: 0.03
+                  dst_port_shares:
+                    '443': 0.70
+                    '80': 0.15
+                    '53': 0.02
+                    'other': 0.13
+                peaks_bps:
+                  - peak_id: "peak_bps_001"
+                    start_ts: "2026-07-08T12:00:00Z"
+                    end_ts: "2026-07-08T12:00:10Z"
+                    headline: "High volume DNS reflection attack detected at lon scrub center targeting destination port 53."
+                    total_bps: 1875000000
+                    total_pps: 375000
+                    breakdowns:
+                      by_sc:
+                        - value: "lon"
+                          bps: 1500000000
+                          pps: 300000
+                          share_pct: 80.0
+                          delta_vs_baseline_pct: 12000.0
+                        - value: "fra"
+                          bps: 375000000
+                          pps: 75000
+                          share_pct: 20.0
+                          delta_vs_baseline_pct: 3000.0
+                      by_protocol:
+                        - value: "udp"
+                          bps: 1856250000
+                          pps: 371250
+                          share_pct: 99.0
+                          delta_vs_baseline_pct: 123750.0
+                        - value: "tcp"
+                          bps: 18750000
+                          pps: 3750
+                          share_pct: 1.0
+                          delta_vs_baseline_pct: 75.0
+                      by_dst_port:
+                        - value: "53"
+                          bps: 1837500000
+                          pps: 367500
+                          share_pct: 98.0
+                          delta_vs_baseline_pct: 735000.0
+                        - value: "443"
+                          bps: 18750000
+                          pps: 3750
+                          share_pct: 1.0
+                          delta_vs_baseline_pct: -85.0
+                      by_ethernet_type:
+                        - value: "IPv4"
+                          bps: 1875000000
+                          pps: 375000
+                          share_pct: 100.0
+                          delta_vs_baseline_pct: 14900.0
+                peaks_pps:
+                  - peak_id: "peak_pps_001"
+                    start_ts: "2026-07-08T12:00:00Z"
+                    end_ts: "2026-07-08T12:00:10Z"
+                    headline: "DNS reflection attack flooding target with UDP packets."
+                    total_bps: 1875000000
+                    total_pps: 375000
+                    breakdowns:
+                      by_sc:
+                        - value: "lon"
+                          bps: 1500000000
+                          pps: 300000
+                          share_pct: 80.0
+                          delta_vs_baseline_pct: 12000.0
+                      by_protocol:
+                        - value: "udp"
+                          bps: 1856250000
+                          pps: 371250
+                          share_pct: 99.0
+                          delta_vs_baseline_pct: 123750.0
+                      by_dst_port:
+                        - value: "53"
+                          bps: 1837500000
+                          pps: 367500
+                          share_pct: 98.0
+                          delta_vs_baseline_pct: 735000.0
+                      by_ethernet_type:
+                        - value: "IPv4"
+                          bps: 1875000000
+                          pps: 375000
+                          share_pct: 100.0
+                          delta_vs_baseline_pct: 14900.0
+        '400':
+          description: Invalid request parameters.
+        '500':
+          description: Internal server error during analysis.
+components:
+  schemas:
+    TrafficAnalysisRequest:
+      type: object
+      required:
+        - detection_target
+        - scrub_centers
+      properties:
+        detection_target:
+          type: string
+          description: An IPv4/IPv6 address or CIDR block.
+          example: "192.0.2.10"
+        scrub_centers:
+          type: array
+          items:
+            type: string
+          description: A list of scrub center location codes to filter by.
+          example: ["lon", "fra"]
+    TrafficSnapshot:
+      type: object
+      required:
+        - baseline
+        - peaks_bps
+        - peaks_pps
+      properties:
+        baseline:
+          $ref: '#/components/schemas/Baseline'
+        peaks_bps:
+          type: array
+          description: Top 5 BPS Peak objects.
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/Peak'
+        peaks_pps:
+          type: array
+          description: Top 5 PPS Peak objects.
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/Peak'
+    Baseline:
+      type: object
+      required:
+        - total_bps
+        - total_pps
+        - protocol_shares
+        - dst_port_shares
+      properties:
+        total_bps:
+          type: integer
+          format: int64
+          description: Average baseline bits per second.
+        total_pps:
+          type: integer
+          format: int64
+          description: Average baseline packets per second.
+        protocol_shares:
+          type: object
+          additionalProperties:
+            type: number
+            format: float
+          description: Percentage share of traffic by protocol.
+        dst_port_shares:
+          type: object
+          additionalProperties:
+            type: number
+            format: float
+          description: Percentage share of traffic by destination port.
+    Peak:
+      type: object
+      required:
+        - peak_id
+        - start_ts
+        - end_ts
+        - headline
+        - total_bps
+        - total_pps
+        - breakdowns
+      properties:
+        peak_id:
+          type: string
+        start_ts:
+          type: string
+          format: date-time
+        end_ts:
+          type: string
+          format: date-time
+        headline:
+          type: string
+          description: AI-generated narration of the anomaly.
+        total_bps:
+          type: integer
+          format: int64
+        total_pps:
+          type: integer
+          format: int64
+        breakdowns:
+          $ref: '#/components/schemas/PeakBreakdown'
+    PeakBreakdown:
+      type: object
+      required:
+        - by_sc
+        - by_protocol
+        - by_dst_port
+        - by_ethernet_type
+      properties:
+        by_sc:
+          type: array
+          items:
+            $ref: '#/components/schemas/BreakdownItem'
+        by_protocol:
+          type: array
+          items:
+            $ref: '#/components/schemas/BreakdownItem'
+        by_dst_port:
+          type: array
+          items:
+            $ref: '#/components/schemas/BreakdownItem'
+        by_ethernet_type:
+          type: array
+          items:
+            $ref: '#/components/schemas/BreakdownItem'
+    BreakdownItem:
+      type: object
+      required:
+        - value
+        - bps
+        - pps
+        - share_pct
+        - delta_vs_baseline_pct
+      properties:
+        value:
+          type: string
+          description: The dimension value (e.g. scrub center code, protocol name, port number, or ethertype).
+        bps:
+          type: integer
+          format: int64
+        pps:
+          type: integer
+          format: int64
+        share_pct:
+          type: number
+          format: float
+          description: Percentage share of the traffic within this peak.
+        delta_vs_baseline_pct:
+          type: number
+          format: float
+          description: Percentage difference compared to the historical baseline.

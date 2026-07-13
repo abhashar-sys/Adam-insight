@@ -11,12 +11,12 @@ Writes: ``peak_breakdowns[peak_id]``  (PeakBreakdown)
 
 import logging
 
-from models.traffic_analysis import (
+from traffic_intel_agent.models.traffic_analysis import (
     BreakdownEntry,
     PeakBreakdown,
     PeakWindow,
 )
-from repositories.clickhouse_repo import ClickHouseRepository
+from traffic_intel_agent.repositories.clickhouse_repo import ClickHouseRepository
 
 logger = logging.getLogger(__name__)
 

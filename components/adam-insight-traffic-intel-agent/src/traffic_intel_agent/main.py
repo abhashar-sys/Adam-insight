@@ -141,7 +141,7 @@ def main():
     if scrub_centers:
         print(f"  Scrub centers: {', '.join(scrub_centers)}")
 
-    from graph.graph import graph
+    from traffic_intel_agent.graph.graph import graph
 
     result = graph.invoke({
         "detection_target": target,

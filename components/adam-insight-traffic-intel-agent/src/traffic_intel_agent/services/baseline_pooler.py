@@ -10,8 +10,8 @@ Per-dimension shares are weighted by traffic volume — heavier days
 naturally count more, which is intentional ("typical day" = volume-weighted).
 """
 
-from models.traffic_analysis import PooledBaseline
-from config.constants import SECONDS_PER_DAY
+from traffic_intel_agent.models.traffic_analysis import PooledBaseline
+from traffic_intel_agent.config.constants import SECONDS_PER_DAY
 
 
 def pool_baseline(raw_profiles: list[dict]) -> PooledBaseline:

@@ -9,12 +9,12 @@ from cassandra.cluster import Cluster
 # pyrefly: ignore [missing-import]
 from cassandra.query import PreparedStatement
 
-from config.settings import (
+from traffic_intel_agent.config.settings import (
     CASSANDRA_CONTACT_POINTS,
     CASSANDRA_PORT,
     CASSANDRA_KEYSPACE,
 )
-from config.constants import TRAILING_BASELINE_DAYS
+from traffic_intel_agent.config.constants import TRAILING_BASELINE_DAYS
 
 logger = logging.getLogger(__name__)
 

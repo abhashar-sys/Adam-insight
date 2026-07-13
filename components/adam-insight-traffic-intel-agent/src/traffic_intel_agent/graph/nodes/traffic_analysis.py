@@ -12,9 +12,9 @@ Writes: ``peaks_bps``, ``peaks_pps``
 import logging
 from collections import defaultdict
 
-from models.traffic_analysis import TrafficIntelState, PeakWindow
-from repositories.clickhouse_repo import ClickHouseRepository
-from services.traffic_analyzer import PeakDetector
+from traffic_intel_agent.models.traffic_analysis import TrafficIntelState, PeakWindow
+from traffic_intel_agent.repositories.clickhouse_repo import ClickHouseRepository
+from traffic_intel_agent.services.traffic_analyzer import PeakDetector
 
 logger = logging.getLogger(__name__)
 

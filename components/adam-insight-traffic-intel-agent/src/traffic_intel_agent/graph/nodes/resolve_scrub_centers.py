@@ -10,8 +10,8 @@ Writes: ``device_ips``  (dict[str, list[str]])
 import logging
 from collections import defaultdict
 
-from models.traffic_analysis import TrafficIntelState
-from repositories.clickhouse_repo import ClickHouseRepository
+from traffic_intel_agent.models.traffic_analysis import TrafficIntelState
+from traffic_intel_agent.repositories.clickhouse_repo import ClickHouseRepository
 
 logger = logging.getLogger(__name__)
 

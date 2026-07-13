@@ -9,7 +9,7 @@ only the structured snapshot.
 
 import logging
 
-from models.traffic_analysis import TrafficIntelState, TrafficSnapshot
+from traffic_intel_agent.models.traffic_analysis import TrafficIntelState, TrafficSnapshot
 
 logger = logging.getLogger(__name__)
 

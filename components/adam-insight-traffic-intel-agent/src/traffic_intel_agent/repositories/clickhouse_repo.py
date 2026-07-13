@@ -11,7 +11,7 @@ import logging
 # pyrefly: ignore [missing-import]
 import clickhouse_connect
 
-from config.settings import (
+from traffic_intel_agent.config.settings import (
     CLICKHOUSE_HOST,
     CLICKHOUSE_PORT,
     CLICKHOUSE_USERNAME,
