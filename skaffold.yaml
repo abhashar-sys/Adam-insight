@@ -19,7 +19,7 @@ profiles:
     kubeContext: spock-dart-nss1-8
     helm:
       releases:
-        - name: adam-insight
+        - name: adam-insight-customer-context-agent
           namespace: adam
           chartPath: chart
           setValues:
