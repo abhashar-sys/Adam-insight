@@ -1,0 +1,11 @@
+# Pattern matching rules for ignoring files during helm package/push
+.git
+.gitignore
+.idea
+.vscode
+*.swp
+*.bak
+*~
+.DS_Store
+# Avoid packaging charts subdirectory dependencies if managed via requirements.yaml
+charts/*.tgz

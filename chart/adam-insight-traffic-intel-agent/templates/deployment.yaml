@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "adam-insight-traffic-intel-agent.fullname" . }}
+  labels:
+    {{- include "adam-insight-traffic-intel-agent.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "adam-insight-traffic-intel-agent.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: {{ .Values.strategy.type }}
+    {{- if eq .Values.strategy.type "RollingUpdate" }}
+    rollingUpdate:
+      maxSurge: {{ .Values.strategy.rollingUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.strategy.rollingUpdate.maxUnavailable }}
+    {{- end }}
+  template:
+    metadata:
+      annotations:
+        # Force a rolling restart when the ConfigMap changes
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "adam-insight-traffic-intel-agent.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "adam-insight-traffic-intel-agent.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+              protocol: TCP
+          # ----------------------------------------------------------------
+          # Environment — plain values from values.yaml
+          # ----------------------------------------------------------------
+          env:
+            {{- range $key, $val := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $val | quote }}
+            {{- end }}
+          # ----------------------------------------------------------------
+          # Environment — sensitive values from a Kubernetes Secret
+          # ----------------------------------------------------------------
+          {{- if .Values.envFromSecret.enabled }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.envFromSecret.secretName }}
+            {{- if .Values.configMap.enabled }}
+            - configMapRef:
+                name: {{ include "adam-insight-traffic-intel-agent.fullname" . }}
+            {{- end }}
+          {{- end }}
+          # ----------------------------------------------------------------
+          # Probes
+          # ----------------------------------------------------------------
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          # ----------------------------------------------------------------
+          # Resources
+          # ----------------------------------------------------------------
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      # ----------------------------------------------------------------
+      # Scheduling
+      # ----------------------------------------------------------------
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

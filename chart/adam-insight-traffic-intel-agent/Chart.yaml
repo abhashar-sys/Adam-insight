@@ -1,0 +1,8 @@
+apiVersion: v2
+name: adam-insight-traffic-intel-agent
+description: >
+  Helm chart for the Adam Insight Traffic Intelligence Agent —
+  a LangGraph-powered DDoS analysis service backed by ClickHouse and Cassandra.
+type: application
+version: 0.1.0        # Chart version (bump on chart changes)
+appVersion: "0.1.0"   # Application version (mirrors pyproject.toml project.version)

@@ -1,0 +1,141 @@
+# =============================================================================
+# values.yaml — Default configuration for adam-insight-traffic-intel-agent
+# Override per-environment with: helm upgrade ... -f values-prod.yaml
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Image
+# ---------------------------------------------------------------------------
+image:
+  repository: your-registry/adam-insight-traffic-intel-agent  # TODO: replace with your registry path
+  tag: "0.1.0"           # Pinned tag; use "latest" only in dev
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+# - name: regcred
+
+# ---------------------------------------------------------------------------
+# Replica count & update strategy
+# ---------------------------------------------------------------------------
+replicaCount: 1
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+# ---------------------------------------------------------------------------
+# Service
+# ---------------------------------------------------------------------------
+service:
+  type: ClusterIP        # Use LoadBalancer or NodePort to expose externally
+  port: 80               # Port exposed by the Service
+  targetPort: 8080       # Port the container listens on (must match Dockerfile EXPOSE)
+
+# ---------------------------------------------------------------------------
+# Resources — set requests/limits to avoid OOM kills and noisy neighbours
+# ---------------------------------------------------------------------------
+resources:
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+  limits:
+    cpu: "1000m"
+    memory: "1Gi"
+
+# ---------------------------------------------------------------------------
+# Probes
+# ---------------------------------------------------------------------------
+livenessProbe:
+  exec:
+    command: ["python", "-c", "import traffic_intel_agent; print('ok')"]
+  initialDelaySeconds: 20
+  periodSeconds: 30
+  failureThreshold: 3
+
+readinessProbe:
+  exec:
+    command: ["python", "-c", "import traffic_intel_agent; print('ok')"]
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  failureThreshold: 3
+
+# ---------------------------------------------------------------------------
+# Environment variables
+# Non-sensitive values are set directly; sensitive values reference Secrets.
+# ---------------------------------------------------------------------------
+env:
+  # Application behaviour
+  LOG_LEVEL: "INFO"
+  PYTHONUNBUFFERED: "1"
+
+  # ClickHouse connection
+  CLICKHOUSE_HOST: "clickhouse.default.svc.cluster.local"
+  CLICKHOUSE_PORT: "8123"
+  CLICKHOUSE_DATABASE: "ddos_traffic"
+  # CLICKHOUSE_USER and CLICKHOUSE_PASSWORD come from a Secret (see envFromSecret)
+
+  # Cassandra connection
+  CASSANDRA_CONTACT_POINTS: "cassandra.default.svc.cluster.local"
+  CASSANDRA_PORT: "9042"
+  CASSANDRA_KEYSPACE: "traffic_intel"
+  # CASSANDRA_USER and CASSANDRA_PASSWORD come from a Secret (see envFromSecret)
+
+# Reference to an existing Kubernetes Secret that holds sensitive credentials.
+# Create it with:
+#   kubectl create secret generic traffic-intel-agent-credentials \
+#     --from-literal=CLICKHOUSE_USER=... \
+#     --from-literal=CLICKHOUSE_PASSWORD=... \
+#     --from-literal=CASSANDRA_USER=... \
+#     --from-literal=CASSANDRA_PASSWORD=...
+envFromSecret:
+  enabled: true
+  secretName: "traffic-intel-agent-credentials"
+
+# ---------------------------------------------------------------------------
+# ConfigMap — non-sensitive config files mounted into the container
+# ---------------------------------------------------------------------------
+configMap:
+  enabled: true
+  data: {}  # Add key/value pairs here; they are mounted as env vars
+
+# ---------------------------------------------------------------------------
+# Service account
+# ---------------------------------------------------------------------------
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# ---------------------------------------------------------------------------
+# Pod-level settings
+# ---------------------------------------------------------------------------
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false   # Set to true once you confirm no runtime writes
+  capabilities:
+    drop: ["ALL"]
+
+# ---------------------------------------------------------------------------
+# Node scheduling
+# ---------------------------------------------------------------------------
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# ---------------------------------------------------------------------------
+# Autoscaling (disabled by default; enable once load profile is understood)
+# ---------------------------------------------------------------------------
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
