@@ -1,8 +1,10 @@
-# 🔍 Adam Insight
+# 🔍 Adam Insight — Traffic Intelligence Agent
 
 **Automated DDoS Attack Mitigation — Intelligent Network Signal & Insight Generator**
 
-Adam Insight is a **LangGraph-based** traffic analysis agent that detects anomalous spikes (peaks) in network traffic data sourced from **ClickHouse** (sFlow telemetry) and **Cassandra** (daily baseline profiles). Given a detection target (IP or CIDR) and a list of scrub centers, it produces a traffic snapshot that a SOCC engineer can read at a glance: what the target's traffic profile has looked like over the past week, what the largest spikes in the last hour were, and how each spike's composition compares to the historical baseline.
+Adam Insight is a **LangGraph-based** traffic analysis micro-service that detects anomalous spikes (peaks) in network traffic data sourced from **ClickHouse** (sFlow telemetry) and **Cassandra** (daily baseline profiles). Given a detection target (IP or CIDR), it produces a full traffic snapshot — peak windows, per-peak decomposition by protocol, port, and scrub center, and delta comparison against a 6-day historical baseline.
+
+The service is deployed as a **Kubernetes workload** with a **FastAPI REST API**, a **Helm chart**, and built via **Skaffold + Docker**.
 
 ---
 
@@ -10,12 +12,12 @@ Adam Insight is a **LangGraph-based** traffic analysis agent that detects anomal
 
 - [Features](#-features)
 - [Architecture](#-architecture)
-- [Folder Structure](#-folder-structure)
-- [Module Descriptions](#-module-descriptions)
-- [Tech Stack & Dependencies](#-tech-stack--dependencies)
-- [Setup & Installation](#-setup--installation)
+- [Repository Structure](#-repository-structure)
+- [API Reference](#-api-reference)
+- [Deployment](#-deployment)
+- [Local Development](#-local-development)
 - [Configuration](#-configuration)
-- [Usage](#-usage)
+- [Tech Stack & Dependencies](#-tech-stack--dependencies)
 - [Testing](#-testing)
 - [Data Model](#-data-model)
 - [Peak Detection Algorithm](#-peak-detection-algorithm)
@@ -27,18 +29,17 @@ Adam Insight is a **LangGraph-based** traffic analysis agent that detects anomal
 
 | Feature | Description |
 |---|---|
+| **FastAPI REST Service** | `GET /health` and `POST /analyze` endpoints with async request handling via ThreadPoolExecutor |
 | **LangGraph State Machine** | Deterministic pipeline with parallel execution, fan-out decomposition, and automatic retry/fallback semantics |
-| **Scope-Aware Peak Detection** | Detects peaks independently for overall (all SCs combined) and per scrub center — catches SC-local attacks that get diluted in aggregate |
-| **10-Second Bucket Granularity** | Fine-grained 10-second aggregation windows catch micro-bursts while IQR-based dedup prevents fragmented peaks |
+| **Scope-Aware Peak Detection** | Detects peaks independently for overall (all SCs combined) and per scrub center — catches SC-local attacks diluted in aggregate |
+| **10-Second Bucket Granularity** | Fine-grained aggregation windows catch micro-bursts; IQR-based dedup prevents fragmented peaks |
 | **Baseline Delta Computation** | Compares each peak's composition against a 6-day pooled historical baseline and surfaces % rise/drop per dimension |
-| **Protocol Name Normalization** | Case-insensitive join between ClickHouse (`TCP`) and Cassandra (`tcp`) protocol names |
 | **CIDR Support** | Accepts both single IPs and CIDR notation — uses `isIPAddressInRange()` in ClickHouse queries |
-| **Scrub Center Filtering** | All queries filter by resolved device IPs (`sampler_address`) for accurate SC-scoped analysis |
+| **Cassandra TLS/SSL** | Automatically negotiates SSL/TLS with Cassandra nodes; graceful plaintext fallback |
+| **Scrub Center Mapping** | Resolves SC names to device IPs via `owl_gold.scrubCenterNetworks_dict`; unmapped IPs shown with raw address |
 | **Multi-View Decomposition** | Breaks down each peak by: overall totals, scrub center, EtherType, protocol, and destination port |
-| **Tukey Fence Threshold** | Data-derived IQR prominence cutoff with percentile fallback for flat baselines |
-| **Typed State Classes** | Full Pydantic v2 models for `PeakWindow`, `PeakBreakdown`, `PooledBaseline`, `TrafficSnapshot`, and `TrafficIntelState` |
-| **Graceful Degradation** | If Cassandra is unavailable, the agent still produces live-only output (peaks without baseline comparison) |
-| **29 Unit Tests** | Comprehensive coverage for peak detection, delta calculation, and baseline pooling |
+| **Graceful Degradation** | If Cassandra is unavailable, agent still produces live-only output (peaks without baseline comparison) |
+| **Kubernetes-Native** | Helm chart with HPA, PDB, liveness/readiness probes, Cassandra secret mirroring |
 
 ---
 
@@ -46,6 +47,11 @@ Adam Insight is a **LangGraph-based** traffic analysis agent that detects anomal
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
+│                         FastAPI (uvicorn)                                  │
+│                      POST /analyze  GET /health                            │
+└──────────────────────────────┬─────────────────────────────────────────────┘
+                               │  ThreadPoolExecutor (non-blocking)
+┌──────────────────────────────▼─────────────────────────────────────────────┐
 │                        LangGraph State Machine                             │
 │                                                                            │
 │   START ─┬──▶ resolve_scrub_centers ──┐                                    │
@@ -54,7 +60,7 @@ Adam Insight is a **LangGraph-based** traffic analysis agent that detects anomal
 │                                                                  ▼         │
 │                                                    decompose_peak (×N)     │
 │                                                          │                 │
-│                                                    ──merge──              │
+│                                                    ──merge──               │
 │                                                          │                 │
 │                                                    compute_deltas          │
 │                                                          │                 │
@@ -62,10 +68,10 @@ Adam Insight is a **LangGraph-based** traffic analysis agent that detects anomal
 │                                                          │                 │
 │                                                         END                │
 └────────────────────────────────────────────────────────────────────────────┘
-
-Parallel:  resolve_scrub_centers ∥ fetch_baseline
-Fan-out:   find_peaks → Send(decompose_peak) × (1+N) × 2 × 5 peaks
-Blocking:  compute_deltas waits for all decompose_peak + fetch_baseline
+         │                                        │
+    ClickHouse                               Cassandra
+  owl_bronze.sflowsPostmit            touchstone_ks.daily_profiles
+  owl_gold.scrubCenterNetworks_dict
 ```
 
 ### Node Responsibilities
@@ -81,241 +87,223 @@ Blocking:  compute_deltas waits for all decompose_peak + fetch_baseline
 
 ---
 
-## 📁 Folder Structure
+## 📁 Repository Structure
 
 ```
 adam-insight/
 │
-├── run_traffic_analysis.py          # CLI entry point — invokes the LangGraph agent
-├── requirements.txt                 # Python dependencies
-├── pytest.ini                       # Pytest configuration (sets PYTHONPATH=.)
-├── .env                             # Environment variables (PYTHONPATH=.)
-├── .gitignore                       # Git ignore rules
+├── skaffold.yaml                          # Skaffold build + Helm deploy config (poc profile)
+├── pytest.ini                             # Pytest configuration (sets PYTHONPATH=.)
+├── README.md
 │
-├── config/                          # ⚙️  Configuration layer
-│   ├── __init__.py
-│   ├── settings.py                  # ClickHouse + Cassandra connection settings
-│   └── constants.py                 # Peak-detection tuning (10s buckets) & baseline constants
+├── chart/adam-insight-traffic-intel-agent/   # 🎡 Helm chart
+│   ├── Chart.yaml
+│   ├── values.yaml                           # Default config, resource limits, Cassandra IPs
+│   └── templates/
+│       ├── configmap.yaml                    # Env vars + Cassandra secret mirror annotation
+│       ├── deployment.yaml                   # Pod spec, probes, secret injection
+│       ├── service.yaml                      # ClusterIP service (port 80 → targetPort 8080)
+│       ├── hpa.yaml                          # Horizontal Pod Autoscaler
+│       ├── pdb.yaml                          # Pod Disruption Budget
+│       └── serviceaccount.yaml               # ServiceAccount
 │
-├── models/                          # 📦 Pydantic data models & typed state
-│   ├── __init__.py                  # Re-exports all model classes
-│   └── traffic_analysis.py          # SflowTelemetry, PeakWindow, PeakBreakdown,
-│                                    #   PooledBaseline, TrafficSnapshot, TrafficIntelState
-│
-├── repositories/                    # 🗄️  Data access layer
-│   ├── __init__.py
-│   ├── clickhouse_repo.py           # ClickHouseRepository — SC-aware query builders,
-│   │                                #   CIDR support, 10s buckets, combined CTE queries
-│   └── cassandra_repo.py            # CassandraRepository — 6-day baseline profile fetcher
-│
-├── services/                        # 🔧 Business logic layer
-│   ├── __init__.py
-│   ├── traffic_analyzer.py          # PeakDetector (scipy) + PeakDecomposer
-│   ├── baseline_pooler.py           # Pool raw Cassandra profiles into PooledBaseline
-│   ├── delta_calculator.py          # Compare peak breakdowns vs baseline (% deltas)
-│   └── customer_context_service.py  # Placeholder — future customer context logic
-│
-├── graph/                           # 🔀 LangGraph orchestration
-│   ├── __init__.py
-│   ├── graph.py                     # StateGraph definition & compilation
-│   └── nodes/                       # Individual graph nodes
-│       ├── __init__.py
-│       ├── resolve_scrub_centers.py # SC name → device IP resolution
-│       ├── fetch_baseline.py        # Cassandra baseline fetch + pooling
-│       ├── traffic_analysis.py      # Scope-aware peak detection (overall + per-SC)
-│       ├── decompose_peak.py        # Fan-out peak decomposition
-│       ├── compute_deltas.py        # Baseline delta enrichment
-│       ├── format_output.py         # Final TrafficSnapshot assembly
-│       └── customer_context.py      # Placeholder — future customer context node
-│
-├── tests/                           # ✅ Unit tests
-│   ├── test_peak_detector.py        # 12 tests for PeakDetector (10s buckets, typed output)
-│   ├── test_delta_calculator.py     # 8 tests for DeltaCalculator (normalization, edge cases)
-│   └── test_baseline_pooler.py      # 9 tests for baseline_pooler (pooling, shares, dedup)
-│
-├── run_traffic_analysis.py          # Original entry point 
-├── plot_peaks.py                    # 📊 (Local dev) Matplotlib peak visualisation from CSV
-└── test_on_csv.py                   # 📋 (Local dev) CSV-based offline peak analysis
+└── components/adam-insight-traffic-intel-agent/   # 🐍 Python application
+    ├── Dockerfile                                  # Multi-stage build (builder + runtime)
+    ├── pyproject.toml                              # Package metadata + dependencies
+    ├── check_connections.py                        # Local connectivity test script
+    └── src/traffic_intel_agent/
+        │
+        ├── api.py                       # FastAPI app: /health + /analyze endpoints
+        │
+        ├── config/
+        │   └── settings.py              # All env-var driven settings (ClickHouse + Cassandra)
+        │
+        ├── models/
+        │   └── traffic_analysis.py      # Pydantic models: PeakWindow, PeakBreakdown,
+        │                                #   PooledBaseline, TrafficSnapshot, TrafficIntelState
+        ├── repositories/
+        │   ├── clickhouse_repo.py       # ClickHouse query builders (range, curve, breakdown)
+        │   └── cassandra_repo.py        # Cassandra 6-day baseline fetcher with SSL/TLS
+        │
+        ├── services/
+        │   ├── traffic_analyzer.py      # PeakDetector (scipy) + PeakDecomposer
+        │   ├── baseline_pooler.py       # Pool Cassandra profiles into PooledBaseline
+        │   └── delta_calculator.py      # Compute % deltas vs baseline
+        │
+        └── graph/
+            ├── graph.py                 # LangGraph StateGraph definition + compilation
+            └── nodes/
+                ├── resolve_scrub_centers.py
+                ├── fetch_baseline.py
+                ├── traffic_analysis.py
+                ├── decompose_peak.py
+                ├── compute_deltas.py
+                └── format_output.py
 ```
 
 ---
 
-## 📖 Module Descriptions
+## 🌐 API Reference
 
-### `run_traffic_analysis.py`
-The CLI entry point. Invokes the LangGraph `graph.invoke()` with a detection target and scrub centers, then pretty-prints the resulting `TrafficSnapshot`.
-
+### `GET /health`
+Returns service liveness status.
 ```bash
-python run_traffic_analysis.py 192.0.2.10 lon,fra
+curl http://localhost:8099/health
+# {"status": "ok"}
 ```
 
-### `config/`
-| File | Purpose |
-|---|---|
-| `settings.py` | ClickHouse connection (`host`, `port`, `username`, `password`, `database`) + Cassandra connection (`contact_points`, `port`, `datacenter`, `keyspace`) |
-| `constants.py` | `BUCKET_SECONDS` (10), `MIN_GAP_BUCKETS` (12 ≈ 2 min), `TOP_N` (5), `TUKEY_FENCE` (1.5), `FALLBACK_PERCENTILE` (95), `TRAILING_BASELINE_DAYS` (6) |
+### `POST /analyze`
+Runs the full LangGraph pipeline and returns a `TrafficSnapshot`.
 
-### `models/traffic_analysis.py`
+**Request body:**
+```json
+{
+  "target": "198.18.207.38",
+  "scrub_centers": []
+}
+```
 
-| Class | Purpose |
-|---|---|
-| `SflowTelemetry` | Full Pydantic model mapping the `owl_bronze.sflowsPostmit` ClickHouse schema (L2–L4, ICMP, DNS, ESP/GRE, BGP/Geo) |
-| `PeakWindow` | A single detected peak: `{peak_id, scope, metric, start_ts, end_ts, total_bps, total_pps}` |
-| `BreakdownEntry` | One row in a dimensional breakdown: `{value, bps, pps, share_pct, baseline_share_pct, delta_pct}` |
-| `PeakBreakdown` | Full decomposition across SC, EtherType, protocol, dst_port |
-| `PooledBaseline` | 6-day pooled baseline rates + per-dimension shares (protocol, port, SC) |
-| `TrafficSnapshot` | Final output: baseline + peaks + breakdowns, ready to render |
-| `TrafficIntelState` | LangGraph TypedDict state — wires all nodes together |
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `target` | `string` | ✅ | IP address or CIDR (e.g. `192.0.2.0/24`) |
+| `scrub_centers` | `list[string]` | ❌ | Scrub center names to filter by (empty = all) |
 
-### `repositories/`
-
-| File | Key Changes from V1 |
-|---|---|
-| `clickhouse_repo.py` | CIDR support (`isIPAddressInRange`), SC filtering (`sampler_address IN`), combined range+curve CTE, 10-second buckets, new `build_resolve_sc_query`, `build_by_sc_query`, `build_by_ethernet_type_query` |
-| `cassandra_repo.py` | Uses `config.settings`, location filtering for SC scoping, returns `profile_ts` |
-
-### `services/`
-
-| File | Purpose |
-|---|---|
-| `traffic_analyzer.py` | `PeakDetector` (10s buckets, typed `PeakWindow` output, scope-aware `peak_id`s) + `PeakDecomposer` (SC-filtered decomposition) |
-| `baseline_pooler.py` | Transforms raw Cassandra `daily_profiles` into a `PooledBaseline` with volume-weighted shares |
-| `delta_calculator.py` | Computes total BPS/PPS deltas and per-dimension share deltas with protocol name case-normalization |
-
-### `graph/`
-
-| File | Purpose |
-|---|---|
-| `graph.py` | LangGraph `StateGraph` with parallel start, `Send` fan-out, merge reducer for `peak_breakdowns`, and sequential finish |
-| `nodes/resolve_scrub_centers.py` | Reverse-maps SC names → device IPs via `scrubCenterNetworks_dict` |
-| `nodes/fetch_baseline.py` | Fetches + pools Cassandra baseline; returns `None` on failure |
-| `nodes/traffic_analysis.py` | Runs peak detection for overall + each SC |
-| `nodes/decompose_peak.py` | Fan-out: decomposes one peak into 5 dimensional views |
-| `nodes/compute_deltas.py` | Enriches breakdowns with baseline deltas |
-| `nodes/format_output.py` | Assembles `TrafficSnapshot` |
+**Interactive Swagger UI:** `http://localhost:8099/docs`
 
 ---
 
-## 🛠 Tech Stack & Dependencies
+## 🚀 Deployment
 
-| Package | Version | Purpose |
-|---|---|---|
-| `cassandra-driver` | ≥ 3.29 | Cassandra client for baseline profiles |
-| `clickhouse-connect` | 1.2.0 | ClickHouse HTTP client |
-| `langgraph` | ≥ 0.2 | State machine orchestration with parallel/fan-out |
-| `matplotlib` | 3.11.0 | Traffic curve & peak visualisation (local dev) |
-| `numpy` | 2.4.6 | Numerical array operations |
-| `pydantic` | ≥ 2.0 | Data validation & typed state models |
-| `python-dotenv` | 1.2.2 | Load `.env` environment variables |
-| `scipy` | 1.17.1 | `signal.find_peaks` & `peak_widths` |
+### Prerequisites
+- Docker + Skaffold installed
+- `kubectl` configured with context `spock-dart-nss1-8`
+- Docker registry credentials secret `spock-registry-creds` in namespace `adam`
 
-**Runtime:** Python 3.10+
-
-**External Services:**
-- **ClickHouse** — sFlow telemetry (`owl_bronze.sflowsPostmit`, `owl_gold.scrubCenterNetworks_dict`)
-- **Cassandra** — Daily baseline profiles (`touchstone_ks.daily_profiles`)
-
----
-
-## 🚀 Setup & Installation
+### Build & Deploy (Kubernetes)
 
 ```bash
-# 1. Clone the repository
-git clone <repo-url>
-cd adam-insight
+cd ~/Adam_insight/Adam-insight
+sg docker -c "skaffold run --profile poc"
+```
 
-# 2. Create and activate a virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
+### Monitor Deployment
 
-# 3. Install dependencies
-pip install -r requirements.txt
+```bash
+# Check pod status
+kubectl get pods -n adam -l app.kubernetes.io/name=adam-insight-traffic-intel-agent \
+  --context spock-dart-nss1-8
 
-# 4. Configure connections
-#    Edit config/settings.py with your ClickHouse + Cassandra connection details
+# Stream logs
+kubectl logs -n adam -f -l app.kubernetes.io/name=adam-insight-traffic-intel-agent \
+  --context spock-dart-nss1-8
+```
 
-# 5. Set PYTHONPATH (already in .env, but for manual runs)
-export PYTHONPATH=.
+### Access the API Locally (port-forward)
+
+```bash
+# Terminal 1: Start port-forward
+kubectl port-forward -n adam svc/adam-insight-traffic-intel-agent 8099:80 \
+  --context spock-dart-nss1-8
+
+# Terminal 2: Query the API
+curl -s -X POST http://localhost:8099/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"target": "198.18.207.38"}' | python3 -m json.tool
+```
+
+---
+
+## 💻 Local Development
+
+```bash
+# 1. Go to the component directory
+cd components/adam-insight-traffic-intel-agent
+
+# 2. Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# 3. Install the package in editable mode
+pip install -e .
+
+# 4. Set environment variables
+export CLICKHOUSE_HOST=datalake.spock-dart-nss1-8.plx.tn.akamai.com
+export CLICKHOUSE_PORT=9440
+export CLICKHOUSE_PASSWORD=<your-password>
+export CASSANDRA_CONTACT_POINTS=198.18.238.66:9042,...
+
+# 5. Run the API server locally
+python -m uvicorn traffic_intel_agent.api:app --host 127.0.0.1 --port 8999 --reload
+
+# 6. Test connectivity (ClickHouse + Cassandra)
+python check_connections.py
 ```
 
 ---
 
 ## ⚙️ Configuration
 
-### ClickHouse Connection (`config/settings.py`)
+All settings are driven by **environment variables** (injected via Helm ConfigMap/Secrets in Kubernetes, or set manually for local dev). See [`settings.py`](components/adam-insight-traffic-intel-agent/src/traffic_intel_agent/config/settings.py).
 
-```python
-CLICKHOUSE_HOST     = 'localhost'
-CLICKHOUSE_PORT     = 8123
-CLICKHOUSE_USERNAME = 'default'
-CLICKHOUSE_PASSWORD = ''
-CLICKHOUSE_DATABASE = 'owl_bronze'
-```
-
-### Cassandra Connection (`config/settings.py`)
-
-```python
-CASSANDRA_CONTACT_POINTS = ['198.18.238.66', '198.18.238.67', '198.18.238.68', '198.18.238.69']
-CASSANDRA_PORT       = 9042
-CASSANDRA_DATACENTER = 'DEV01'
-CASSANDRA_KEYSPACE   = 'touchstone_ks'
-```
-
-### Peak Detection Tuning (`config/constants.py`)
-
-| Constant | Default | Description |
+| Variable | Default | Description |
 |---|---|---|
-| `BUCKET_SECONDS` | `10` | Aggregation bucket size (seconds) |
-| `MIN_GAP_BUCKETS` | `12` | Min distance between peaks (~2 min at 10s buckets) |
-| `TOP_N` | `5` | Max peaks returned per scope per metric |
-| `TUKEY_FENCE` | `1.5` | IQR multiplier for Tukey fence (Q3 + k×IQR) |
-| `FALLBACK_PERCENTILE` | `95` | Percentile fallback when IQR = 0 |
-| `TRAILING_BASELINE_DAYS` | `6` | Days of Cassandra baseline to pool |
+| `CLICKHOUSE_HOST` | `datalake.spock-dart-nss1-8.plx.tn.akamai.com` | ClickHouse server hostname |
+| `CLICKHOUSE_PORT` | `9440` | ClickHouse native TCP port (TLS) |
+| `CLICKHOUSE_USERNAME` | `ch_read` | ClickHouse user |
+| `CLICKHOUSE_PASSWORD` | *(from Secret)* | ClickHouse password |
+| `CLICKHOUSE_DATABASE` | `owl_bronze` | ClickHouse database |
+| `CASSANDRA_CONTACT_POINTS` | *explicit node IPs* | Comma-separated list of `host:port` |
+| `CASSANDRA_PORT` | `9042` | Cassandra native port |
+| `CASSANDRA_DATACENTER` | `DEV01` | Cassandra datacenter |
+| `CASSANDRA_KEYSPACE` | `touchstone_ks` | Cassandra keyspace |
+| `CASSANDRA_USERNAME` | *(from mirrored Secret)* | Cassandra username |
+| `CASSANDRA_PASSWORD` | *(from mirrored Secret)* | Cassandra password |
+
+### Cassandra Credentials (Secret Mirroring)
+Cassandra credentials are automatically injected via the Kubernetes secret mirror mechanism:
+```yaml
+annotations:
+  mirror.secret/dart-system.spock-dart-config.cassandra-creds: "enabled"
+```
 
 ---
 
-## 🎯 Usage
+## 🛠 Tech Stack & Dependencies
 
-### Run the Agent
+| Package | Purpose |
+|---|---|
+| `fastapi` + `uvicorn` | REST API server |
+| `langgraph` | LangGraph state machine orchestration |
+| `clickhouse-driver` | ClickHouse native TCP client |
+| `cassandra-driver` | Cassandra client for baseline profiles |
+| `scipy` | `signal.find_peaks` & `peak_widths` for peak detection |
+| `numpy` | Numerical array operations |
+| `pydantic` ≥ 2.0 | Data validation & typed state models |
+| `python-dotenv` | Load `.env` environment variables |
 
-```bash
-# Analyse a single IP with specific scrub centers
-python run_traffic_analysis.py 192.0.2.10 lon,fra
+**Runtime:** Python 3.11 (container), Python 3.12 (local dev)
 
-# Analyse a CIDR
-python run_traffic_analysis.py 192.0.2.0/24 lon,fra
-
-# Analyse with all scrub centers (no filter)
-python run_traffic_analysis.py 192.0.2.10
-```
-
-### CSV Offline Analysis (no database needed)
-
-```bash
-python test_on_csv.py /path/to/csv/exports
-```
-
-### Generate Peak Visualisation Plots
-
-```bash
-python plot_peaks.py
-```
+**External Services:**
+- **ClickHouse** — `owl_bronze.sflowsPostmit`, `owl_gold.scrubCenterNetworks_dict`
+- **Cassandra** — `touchstone_ks.daily_profiles`
 
 ---
 
 ## ✅ Testing
 
 ```bash
-# Run all tests
-pytest -v
+# From project root (Adam-insight/)
+cd components/adam-insight-traffic-intel-agent
+source venv/bin/activate
 
-# Run specific test suites
-pytest tests/test_peak_detector.py -v       # 12 tests
-pytest tests/test_delta_calculator.py -v    # 8 tests
-pytest tests/test_baseline_pooler.py -v     # 9 tests
+# Run all unit tests
+python -m pytest tests/ -v
+
+# Individual test files
+python -m pytest tests/test_peak_detector.py -v
+python -m pytest tests/test_delta_calculator.py -v
+python -m pytest tests/test_baseline_pooler.py -v
 ```
-
-**All 29 tests pass.** Tests cover peak detection (10s buckets, typed output, IQR thresholding), delta computation (case normalization, edge cases), and baseline pooling (dedup, shares).
 
 ---
 
@@ -328,12 +316,10 @@ sflowsPostmit
 ├── Core: time_received_ns, sequence_num, sampling_rate, sampler_address
 ├── L2:   frame_length, src_mac, dst_mac, ethernet_type
 ├── L3:   src_addr, dst_addr, protocol, ip_proto_no, ip_ttl, ip_tos
-├── L4:   src_port, dst_port, tcp_flags, tcp_seq_no, udp_header_len
-├── ICMP: icmp_type, icmp_code, icmp_type_code_name
-├── DNS:  dns_answers, dns_questions, dns_authorities, dns_additionals
-├── ESP:  esp_seq, esp_spi
-├── GRE:  gre_version, gre_protocol, gre_key, gre_seq_no
-├── Encapsulation: layer_stack, layer_size, vlan_id, is_fragment
+├── L4:   src_port, dst_port, tcp_flags
+├── ICMP: icmp_type, icmp_code
+├── DNS:  dns_answers, dns_questions
+├── Encapsulation: vlan_id, is_fragment
 ├── BGP:  src_asn, dst_asn
 └── Geo:  src/dst_latitude, src/dst_longitude, src/dst_city, src/dst_country
 ```
@@ -350,7 +336,6 @@ daily_profiles
     ├── bytes, packets
     ├── protocolList: [{bytes, packets, protocol}, ...]
     ├── dpList: [{bytes, packets, dp}, ...]
-    ├── sipList, spList, flgList, frgList, ...
     └── countryList: [{bytes, packets, country}, ...]
 ```
 
@@ -378,9 +363,8 @@ Per-value share delta = (peak_share[v] - baseline_share[v]) / baseline_share[v] 
 ```
 
 **Edge cases:**
-- Value not in baseline → rendered as "new (not in baseline)"
-- Value not in peak → delta = -100%
-- Baseline rate = 0 → delta = None
+- Value not in baseline → `delta_pct = null`
+- Baseline rate = 0 → `delta_pct = null`
 - Protocol names → case-normalized (`.lower()`) for join
 
 ---
