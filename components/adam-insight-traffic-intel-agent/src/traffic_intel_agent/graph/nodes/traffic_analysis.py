@@ -27,25 +27,43 @@ def _detect_peaks_for_scope(
 ) -> tuple[list[PeakWindow], list[PeakWindow]]:
     """Fetch the curve for one scope and run peak detection.
 
+    Uses a two-step query:
+      1. build_range_query  → get start_ns / end_ns (avoids distributed CTE)
+      2. build_curve_query  → fetch 10-second buckets with inlined literals
+
     Returns
     -------
     (bps_peaks, pps_peaks) : tuple of list[PeakWindow]
     """
-    sql = repo.build_curve_query(target, device_ips)
-
+    # Step 1: get the time range
     try:
-        res = repo.query(sql)
+        range_rows, _ = repo.query(repo.build_range_query(target, device_ips))
+    except Exception as e:
+        logger.error("Range query failed for scope '%s': %s", scope, e)
+        return [], []
+
+    if not range_rows or range_rows[0][0] is None:
+        logger.info("No traffic data for scope '%s' (empty range)", scope)
+        return [], []
+
+    start_ns, end_ns = range_rows[0][0], range_rows[0][1]
+
+    # Step 2: fetch the 10-second bucketed curve
+    try:
+        rows, _ = repo.query(
+            repo.build_curve_query(target, device_ips, start_ns=start_ns, end_ns=end_ns)
+        )
     except Exception as e:
         logger.error("Curve query failed for scope '%s': %s", scope, e)
         return [], []
 
-    if not res.result_rows:
+    if not rows:
         logger.info("No traffic data for scope '%s'", scope)
         return [], []
 
-    timestamps = [row[0] for row in res.result_rows]
-    bps        = [row[1] for row in res.result_rows]
-    pps        = [row[2] for row in res.result_rows]
+    timestamps = [row[0] for row in rows]
+    bps        = [float(row[1]) for row in rows]
+    pps        = [float(row[2]) for row in rows]
 
     detector = PeakDetector(timestamps, bps, pps, scope=scope)
 

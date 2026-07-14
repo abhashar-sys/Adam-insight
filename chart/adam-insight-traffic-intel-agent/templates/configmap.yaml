@@ -4,6 +4,9 @@ metadata:
   name: {{ include "adam-insight-traffic-intel-agent.fullname" . }}
   labels:
     {{- include "adam-insight-traffic-intel-agent.labels" . | nindent 4 }}
+    mirror.register.config: "true"
+  annotations:
+    mirror.secret/dart-system.spock-dart-config.cassandra-creds: "enabled"
 data:
   {{- with .Values.configMap.data }}
   {{- toYaml . | nindent 2 }}

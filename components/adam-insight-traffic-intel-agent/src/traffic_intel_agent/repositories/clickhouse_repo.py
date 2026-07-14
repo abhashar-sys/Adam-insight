@@ -9,7 +9,7 @@ import ipaddress
 import logging
 
 # pyrefly: ignore [missing-import]
-import clickhouse_connect
+from clickhouse_driver import Client
 
 from traffic_intel_agent.config.settings import (
     CLICKHOUSE_HOST,
@@ -17,6 +17,7 @@ from traffic_intel_agent.config.settings import (
     CLICKHOUSE_USERNAME,
     CLICKHOUSE_PASSWORD,
     CLICKHOUSE_DATABASE,
+    CLICKHOUSE_SECURE,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,23 +64,26 @@ class ClickHouseRepository:
     """Encapsulates all ClickHouse data access: client management and query building."""
 
     def __init__(self):
-        self.client = clickhouse_connect.get_client(
+        self.client = Client(
             host=CLICKHOUSE_HOST,
             port=CLICKHOUSE_PORT,
-            username=CLICKHOUSE_USERNAME,
+            user=CLICKHOUSE_USERNAME,
             password=CLICKHOUSE_PASSWORD,
             database=CLICKHOUSE_DATABASE,
+            secure=CLICKHOUSE_SECURE,
+            verify=False,
         )
 
     def query(self, sql: str):
-        """Execute a raw SQL query and return the result."""
-        return self.client.query(sql)
+        """Execute a raw SQL query and return (rows, columns) tuple."""
+        rows, columns_info = self.client.execute(sql, with_column_types=True)
+        return rows, [col[0] for col in columns_info]
 
     def query_as_dicts(self, sql: str) -> list[dict]:
         """Execute a query and return results as a list of dicts."""
-        res = self.client.query(sql)
-        cols = res.column_names
-        return [dict(zip(cols, row)) for row in res.result_rows]
+        rows, columns_info = self.client.execute(sql, with_column_types=True)
+        cols = [col[0] for col in columns_info]
+        return [dict(zip(cols, row)) for row in rows]
 
     # ── SC Resolver ──────────────────────────────────────────────────
 
@@ -97,51 +101,59 @@ class ClickHouseRepository:
 FROM owl_bronze.sflowsPostmit
 WHERE sc_name IN ({sc_list})"""
 
-    # ── Curve Query (combined range + curve, 10-second buckets) ──────
+    # ── Curve Query (split range + curve, 10-second buckets) ─────────
+    # NOTE: The CTE pattern using a subquery over a distributed table is
+    # rejected by this cluster (distributed_product_mode = 'deny', Code 288).
+    # We instead fetch the time range separately and inline the literals.
+
+    def build_range_query(
+        self,
+        target: str,
+        device_ips: list[str] | None = None,
+        hours: int = 1,
+    ) -> str:
+        """Return min/max nanosecond timestamps for the target in the last N hours."""
+        target_filter = build_target_filter(target)
+        sc_filter = build_sc_filter(device_ips)
+        return f"""SELECT
+    min(time_received_ns) AS start_ns,
+    max(time_received_ns) AS end_ns
+FROM owl_bronze.sflowsPostmit
+WHERE {target_filter}
+  {sc_filter}
+  AND time_received_ns >= toUnixTimestamp(now() - INTERVAL {hours} HOUR) * 1000000000"""
 
     @staticmethod
     def build_curve_query(
         target: str,
         device_ips: list[str] | None = None,
+        start_ns: int | None = None,
+        end_ns: int | None = None,
     ) -> str:
-        """Per-10-second bps/pps for the last hour, gaps zero-filled.
+        """Per-10-second bps/pps curve between start_ns and end_ns (nanoseconds).
 
-        Combines the time-range discovery and the curve query into a
-        single statement using a CTE.  Filters on nanosecond timestamps.
+        Call ``build_range_query`` first to get start_ns / end_ns, then pass
+        them here as literals to avoid the double-distributed subquery (Code 288).
         """
         target_filter = build_target_filter(target)
         sc_filter = build_sc_filter(device_ips)
-        return f"""WITH range AS (
-    SELECT
-        min(time_received_ns) AS start_ns,
-        max(time_received_ns) AS end_ns
-    FROM owl_bronze.sflowsPostmit
-    WHERE {target_filter}
-      {sc_filter}
-      AND time_received_ns >= toUnixTimestamp(now() - INTERVAL 1 HOUR) * 1000000000
-)
-SELECT
+        # Inline literals so no subquery touches a distributed table
+        return f"""SELECT
     toStartOfInterval(
         toDateTime(intDiv(time_received_ns, 1000000000)),
         INTERVAL 10 SECOND
     ) AS bucket,
     sum(frame_length * if(sampling_rate > 0, sampling_rate, 1)) * 8 / 10 AS total_bps,
     sum(if(sampling_rate > 0, sampling_rate, 1)) / 10 AS total_pps
-FROM owl_bronze.sflowsPostmit, range
+FROM owl_bronze.sflowsPostmit
 WHERE {target_filter}
   {sc_filter}
-  AND time_received_ns >= range.start_ns
-  AND time_received_ns <  range.end_ns + 1
+  AND time_received_ns >= {start_ns}
+  AND time_received_ns <  {end_ns} + 1
 GROUP BY bucket
 ORDER BY bucket WITH FILL
-    FROM toStartOfInterval(
-        toDateTime(intDiv(coalesce((SELECT start_ns FROM range), 0), 1000000000)),
-        INTERVAL 10 SECOND
-    )
-    TO toStartOfInterval(
-        toDateTime(intDiv(coalesce((SELECT end_ns FROM range), 0), 1000000000)),
-        INTERVAL 10 SECOND
-    )
+    FROM toStartOfInterval(toDateTime(intDiv({start_ns}, 1000000000)), INTERVAL 10 SECOND)
+    TO   toStartOfInterval(toDateTime(intDiv({end_ns},   1000000000)), INTERVAL 10 SECOND)
     STEP toIntervalSecond(10)"""
 
     # ── Decomposition Queries ────────────────────────────────────────

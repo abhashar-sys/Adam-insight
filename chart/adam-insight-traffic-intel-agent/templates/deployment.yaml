@@ -52,6 +52,16 @@ spec:
             - name: {{ $key }}
               value: {{ $val | quote }}
             {{- end }}
+            - name: CASSANDRA_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: dart-system.spock-dart-config.cassandra-creds
+                  key: username
+            - name: CASSANDRA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dart-system.spock-dart-config.cassandra-creds
+                  key: password
           # ----------------------------------------------------------------
           # Environment — sensitive values from a Kubernetes Secret
           # ----------------------------------------------------------------

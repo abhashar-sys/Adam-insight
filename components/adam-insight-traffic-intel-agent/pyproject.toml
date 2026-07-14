@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 license = { text = "Proprietary" }
 
 dependencies = [
-    "clickhouse-connect>=0.7",
+    "clickhouse-driver>=0.2.9",
     "cassandra-driver>=3.29",
     "pydantic>=2.0",
     "scipy>=1.11",
@@ -19,6 +19,9 @@ dependencies = [
     "langgraph>=0.2",
     "python-dotenv>=1.0",
     "matplotlib>=3.8",
+    # API server
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
 ]
 
 [project.optional-dependencies]
@@ -33,6 +36,8 @@ dev = [
 # Exposes `traffic-intel-agent` as a CLI entrypoint after pip install.
 # Expects traffic_intel_agent/main.py to expose a `main()` function.
 traffic-intel-agent = "traffic_intel_agent.main:main"
+# Exposes `traffic-intel-api` to start the FastAPI/Uvicorn server.
+traffic-intel-api = "traffic_intel_agent.api:run"
 
 [tool.setuptools.packages.find]
 # Tells setuptools to look for packages under src/ only.

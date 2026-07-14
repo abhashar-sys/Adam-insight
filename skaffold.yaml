@@ -1,0 +1,26 @@
+apiVersion: skaffold/v4beta11
+kind: Config
+metadata:
+  name: adam-insight
+build:
+  artifacts:
+    - image: registry.spock.tn.akamai.com/plx/adam-insight/adam-insight-traffic-intel-agent
+      context: components/adam-insight-traffic-intel-agent
+      docker:
+        dockerfile: Dockerfile
+        buildArgs:
+          CTX_PATH: .
+          DOCKER_REGISTRY: docker.io
+
+profiles:
+- name: poc
+  deploy:
+    kubeContext: spock-dart-nss1-8
+    helm:
+      releases:
+        - name: adam-insight-traffic-intel-agent
+          namespace: adam
+          chartPath: chart/adam-insight-traffic-intel-agent
+          setValueTemplates:
+            image.repository: "{{.IMAGE_REPO_registry_spock_tn_akamai_com_plx_adam_insight_adam_insight_traffic_intel_agent}}"
+            image.tag: "{{.IMAGE_TAG_registry_spock_tn_akamai_com_plx_adam_insight_adam_insight_traffic_intel_agent}}"

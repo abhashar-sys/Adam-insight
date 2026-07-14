@@ -9,10 +9,14 @@ from cassandra.cluster import Cluster
 # pyrefly: ignore [missing-import]
 from cassandra.query import PreparedStatement
 
+from cassandra.auth import PlainTextAuthProvider
+
 from traffic_intel_agent.config.settings import (
     CASSANDRA_CONTACT_POINTS,
     CASSANDRA_PORT,
     CASSANDRA_KEYSPACE,
+    CASSANDRA_USERNAME,
+    CASSANDRA_PASSWORD,
 )
 from traffic_intel_agent.config.constants import TRAILING_BASELINE_DAYS
 
@@ -31,8 +35,30 @@ class CassandraRepository:
         contact_points = contact_points or CASSANDRA_CONTACT_POINTS
         port = port or CASSANDRA_PORT
 
-        self.cluster = Cluster(contact_points, port=port)
-        self.session = self.cluster.connect(CASSANDRA_KEYSPACE)
+        auth_provider = None
+        if CASSANDRA_USERNAME and CASSANDRA_PASSWORD:
+            auth_provider = PlainTextAuthProvider(
+                username=CASSANDRA_USERNAME,
+                password=CASSANDRA_PASSWORD,
+            )
+
+        # Try connecting with SSL first, fallback to plaintext if it fails
+        import ssl
+        try:
+            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            self.cluster = Cluster(
+                contact_points,
+                port=port,
+                auth_provider=auth_provider,
+                ssl_context=ssl_context,
+            )
+            self.session = self.cluster.connect(CASSANDRA_KEYSPACE)
+        except Exception as ssl_err:
+            logger.warning("Cassandra SSL connection failed: %s. Retrying without SSL...", ssl_err)
+            self.cluster = Cluster(contact_points, port=port, auth_provider=auth_provider)
+            self.session = self.cluster.connect(CASSANDRA_KEYSPACE)
 
         # Prepared statement for 6-day baseline lookup
         self.profile_stmt: PreparedStatement = self.session.prepare(

@@ -1,0 +1,15 @@
+{{- if gt (int .Values.replicaCount) 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "adam-insight-traffic-intel-agent.fullname" . }}
+  labels:
+    {{- include "adam-insight-traffic-intel-agent.labels" . | nindent 4 }}
+spec:
+  # Keep at least 1 pod running during voluntary disruptions (node drains, upgrades).
+  # Only active when replicaCount > 1.
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "adam-insight-traffic-intel-agent.selectorLabels" . | nindent 6 }}
+{{- end }}

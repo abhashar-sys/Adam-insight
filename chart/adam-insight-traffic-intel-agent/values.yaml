@@ -7,7 +7,7 @@
 # Image
 # ---------------------------------------------------------------------------
 image:
-  repository: your-registry/adam-insight-traffic-intel-agent  # TODO: replace with your registry path
+  repository: registry.spock.tn.akamai.com/plx/adam-insight/adam-insight-traffic-intel-agent
   tag: "0.1.0"           # Pinned tag; use "latest" only in dev
   pullPolicy: IfNotPresent
 
@@ -17,7 +17,7 @@ imagePullSecrets: []
 # ---------------------------------------------------------------------------
 # Replica count & update strategy
 # ---------------------------------------------------------------------------
-replicaCount: 1
+replicaCount: 2   # minimum for HA; PDB ensures 1 pod stays up during rolling updates
 
 strategy:
   type: RollingUpdate
@@ -45,18 +45,20 @@ resources:
     memory: "1Gi"
 
 # ---------------------------------------------------------------------------
-# Probes
+# Probes — hit the FastAPI /health endpoint for accurate liveness/readiness.
 # ---------------------------------------------------------------------------
 livenessProbe:
-  exec:
-    command: ["python", "-c", "import traffic_intel_agent; print('ok')"]
+  httpGet:
+    path: /health
+    port: 8080
   initialDelaySeconds: 20
   periodSeconds: 30
   failureThreshold: 3
 
 readinessProbe:
-  exec:
-    command: ["python", "-c", "import traffic_intel_agent; print('ok')"]
+  httpGet:
+    path: /health
+    port: 8080
   initialDelaySeconds: 10
   periodSeconds: 10
   failureThreshold: 3
@@ -70,17 +72,19 @@ env:
   LOG_LEVEL: "INFO"
   PYTHONUNBUFFERED: "1"
 
-  # ClickHouse connection
-  CLICKHOUSE_HOST: "clickhouse.default.svc.cluster.local"
-  CLICKHOUSE_PORT: "8123"
-  CLICKHOUSE_DATABASE: "ddos_traffic"
-  # CLICKHOUSE_USER and CLICKHOUSE_PASSWORD come from a Secret (see envFromSecret)
+  # ClickHouse connection (non-sensitive; credentials come from Secret below)
+  CLICKHOUSE_HOST: "datalake.spock-dart-nss1-8.plx.tn.akamai.com"
+  CLICKHOUSE_PORT: "9440"
+  CLICKHOUSE_SECURE: "true"
+  CLICKHOUSE_DATABASE: "owl_bronze"
+  # CLICKHOUSE_USERNAME and CLICKHOUSE_PASSWORD injected via envFromSecret
 
-  # Cassandra connection
-  CASSANDRA_CONTACT_POINTS: "cassandra.default.svc.cluster.local"
+  # Cassandra connection (non-sensitive; credentials come from Secret below)
+  CASSANDRA_CONTACT_POINTS: "198.18.238.66:9042,198.18.238.67:9042,198.18.238.68:9042,198.18.238.69:9042,198.18.238.70:9042,198.18.238.71:9042,198.18.238.72:9042,198.18.238.73:9042"
   CASSANDRA_PORT: "9042"
-  CASSANDRA_KEYSPACE: "traffic_intel"
-  # CASSANDRA_USER and CASSANDRA_PASSWORD come from a Secret (see envFromSecret)
+  CASSANDRA_DATACENTER: "DEV01"
+  CASSANDRA_KEYSPACE: "touchstone_ks"
+  # CASSANDRA_USER and CASSANDRA_PASSWORD injected via envFromSecret
 
 # Reference to an existing Kubernetes Secret that holds sensitive credentials.
 # Create it with:
@@ -139,3 +143,7 @@ autoscaling:
   minReplicas: 1
   maxReplicas: 5
   targetCPUUtilizationPercentage: 70
+
+# Registry pull secret — created via kubectl create secret docker-registry
+imagePullSecrets:
+  - name: spock-registry-creds

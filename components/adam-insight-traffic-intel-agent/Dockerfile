@@ -51,10 +51,11 @@ USER agent
 # Expose the port the agent listens on (override in Helm values if needed)
 EXPOSE 8080
 
-# Healthcheck — adjust the endpoint when your HTTP server is wired up
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD python -c "import traffic_intel_agent; print('ok')" || exit 1
+# Healthcheck — calls the /health HTTP endpoint exposed by the FastAPI server.
+# `curl` is available in python:3.11-slim; --fail makes curl exit non-zero on 4xx/5xx.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl --silent --fail http://localhost:8080/health || exit 1
 
-# Default entrypoint delegates to the CLI script defined in pyproject.toml.
-# Override with `args` in the Helm deployment if you need a different command.
-ENTRYPOINT ["python", "-m", "traffic_intel_agent.main"]
+# Start the FastAPI server via Uvicorn on port 8080.
+# API_HOST / API_PORT / API_LOG_LEVEL can be overridden via Helm env values.
+ENTRYPOINT ["uvicorn", "traffic_intel_agent.api:app", "--host", "0.0.0.0", "--port", "8080"]
