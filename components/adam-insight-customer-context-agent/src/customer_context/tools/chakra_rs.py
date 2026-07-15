@@ -72,22 +72,28 @@ def _analyse_vectors(events:list[dict])->dict:
         "vector_diversity":len(counts)
     }
 
-def _analyse_magnitude(events:list[dict])->dict:
-    sorted_events=sorted(events,key=lambda e:e["start_time"])
-    bps_values=[e["agr_peak_bps"] for e in sorted_events if e.get("agr_peak_bps")]
-    pps_values=[e["agr_peak_pps"] for e in sorted_events if e.get("agr_peak_pps")]
+def _analyse_magnitude(events: list[dict]) -> dict:
+    sorted_events = sorted(events, key=lambda e: e["start_time"])
+    bps_values = [e["agr_peak_bps"] for e in sorted_events if e.get("agr_peak_bps")]
+    pps_values = [e["agr_peak_pps"] for e in sorted_events if e.get("agr_peak_pps")]
 
     if not bps_values:
-        return {"max_peak_bps":None,"average_peak_bps":None,"largest_attack_recent":None}
-    midpoint=len(bps_values)//2
-    recent_avg=mean(bps_values[midpoint:] or bps_values)
-    overall_avg=mean(bps_values)
+        return {
+            "max_peak_bps": None,
+            "average_peak_bps": None,
+            "max_peak_pps": max(pps_values) if pps_values else None, # <-- FIXED TO KEEP DICT SHAPE VALID
+            "largest_attack_recent": None
+        }
+        
+    midpoint = len(bps_values) // 2
+    recent_avg = mean(bps_values[midpoint:] or bps_values)
+    overall_avg = mean(bps_values)
 
     return {
-        "max_peak_bps":max(bps_values),
-        "average_peak_bps":round(overall_avg,2),
-        "max_peak_pps":max(pps_values) if pps_values else None,
-        "largest_attack_recent":recent_avg>=overall_avg
+        "max_peak_bps": max(bps_values),
+        "average_peak_bps": round(overall_avg, 2),
+        "max_peak_pps": max(pps_values) if pps_values else None,
+        "largest_attack_recent": recent_avg >= overall_avg
     }
 
 def _analyse_mitigation_effectiveness(events:list[dict])->dict:
@@ -106,26 +112,49 @@ def _analyse_mitigation_effectiveness(events:list[dict])->dict:
         "recurring_unmitigated_vectors":[v for v,_ in recurring_unmitigated_vectors.most_common(3)]
     }
 
-def _analyse_duration(events:list[dict])->dict:
-    durations=[_compute_duration_hours(e) for e in events]
-    durations=[d for d in durations if d is not None]
+def _analyse_duration(events: list[dict]) -> dict:
+    durations = [_compute_duration_hours(e) for e in events]
+    durations = [d for d in durations if d is not None]
+    
+    # Calculate ongoing count first so it's always accessible
+    ongoing = sum(1 for e in events if e.get("is_active_attack"))
+    
     if not durations:
-        return {"average_duration_hours":None,"longest_duration_hours":None}
+        return {
+            "average_duration_hours": None,
+            "longest_duration_hours": None,
+            "ongoing_count": ongoing # <-- FIXED HERE
+        }
     return {
-        "average_duration_hours":round(mean(durations),2),
-        "longest_duration_hours":max(durations),
-        "ongoing_count":sum(1 for e in events if e.get("is_active_attack"))
+        "average_duration_hours": round(mean(durations), 2),
+        "longest_duration_hours": max(durations),
+        "ongoing_count": ongoing
     }
 
 def analyse_historical_pattern(events:list[dict])->dict:
     if not events:
         return {
-            "summary":"No historical attacks recorded against this network in the last 90 days",
-            "recurrence":None,
-            "vectors":None,
-            "magnitude":None,
-            "mitigation_effectiveness":None,
-            "duration":None
+            "summary": "No historical attacks recorded against this network in the last 90 days",
+            "recurrence": {
+                "total_attacks": 0,
+                "average_gap_days": None,
+                "longest_quiet_period_days": None,
+                "shortest_gap_days": None
+            },
+            "vectors": {"dominant_vectors": [], "vector_diversity": 0},
+            "magnitude": {"max_peak_bps": None, "average_peak_bps": None, "max_peak_pps": None, "largest_attack_recent": None},
+            "mitigation_effectiveness": {
+                "success_rate_percent": None,
+                "successful_count": 0,
+                "failed_count": 0,
+                "unknown_outcome_count": 0,
+                "recurring_unmitigated_vectors": []
+            },
+            "duration": {
+                "average_duration_hours": None,
+                "longest_duration_hours": None,
+                "ongoing_count": 0
+            }
         }
     recurrence=_analyse_recurrence(events)
     vectors=_analyse_vectors(events)
