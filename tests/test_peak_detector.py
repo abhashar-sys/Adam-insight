@@ -1,8 +1,8 @@
 """Tests for PeakDetector with 10-second bucket granularity."""
 
 from datetime import datetime, timedelta
-from services.traffic_analyzer import PeakDetector
-from models.traffic_analysis import PeakWindow
+from traffic_intel_agent.services.traffic_analyzer import PeakDetector
+from traffic_intel_agent.models.traffic_analysis import PeakWindow
 
 
 # ─── helpers ──────────────────────────────────────────────────────

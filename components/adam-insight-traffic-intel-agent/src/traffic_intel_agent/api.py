@@ -95,6 +95,16 @@ class AnalyzeRequest(BaseModel):
         ),
         examples=[["SC-LON", "SC-AMS"]],
     )
+    window_hours: int = Field(
+        default=24,
+        ge=1,
+        le=168,
+        description=(
+            "How many hours back to query sflowsPostmit for peak detection. "
+            "Default is 24h. Maximum is 168h (7 days)."
+        ),
+        examples=[1, 24, 72],
+    )
 
 
 class HealthResponse(BaseModel):
@@ -151,6 +161,7 @@ async def analyze(request: AnalyzeRequest) -> TrafficSnapshot:
             {
                 "detection_target": request.target,
                 "scrub_centers": request.scrub_centers,
+                "window_hours": request.window_hours,
             }
         )
         snapshot: TrafficSnapshot | None = result.get("output")

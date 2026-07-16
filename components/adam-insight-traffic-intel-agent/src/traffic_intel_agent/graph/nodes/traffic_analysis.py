@@ -24,6 +24,7 @@ def _detect_peaks_for_scope(
     target: str,
     scope: str,
     device_ips: list[str] | None = None,
+    window_hours: int = 24,
 ) -> tuple[list[PeakWindow], list[PeakWindow]]:
     """Fetch the curve for one scope and run peak detection.
 
@@ -37,7 +38,7 @@ def _detect_peaks_for_scope(
     """
     # Step 1: get the time range
     try:
-        range_rows, _ = repo.query(repo.build_range_query(target, device_ips))
+        range_rows, _ = repo.query(repo.build_range_query(target, device_ips, hours=window_hours))
     except Exception as e:
         logger.error("Range query failed for scope '%s': %s", scope, e)
         return [], []
@@ -71,8 +72,8 @@ def _detect_peaks_for_scope(
     pps_peaks = detector.detect(metric="pps")
 
     logger.info(
-        "Scope '%s': %d BPS peak(s), %d PPS peak(s) from %d buckets",
-        scope, len(bps_peaks), len(pps_peaks), len(timestamps),
+        "Scope '%s': %d BPS peak(s), %d PPS peak(s) from %d buckets (window=%dh)",
+        scope, len(bps_peaks), len(pps_peaks), len(timestamps), window_hours,
     )
 
     return bps_peaks, pps_peaks
@@ -82,11 +83,14 @@ def find_peaks(state: TrafficIntelState) -> dict:
     """Produce top-5 BPS and PPS peaks for overall + per-SC scopes."""
     target = state["detection_target"]
     device_ips = state.get("device_ips", {})
+    window_hours = state.get("window_hours", 24)   # default 24h if not provided
 
     repo = ClickHouseRepository()
 
     peaks_bps: dict[str, list[PeakWindow]] = {}
     peaks_pps: dict[str, list[PeakWindow]] = {}
+
+    logger.info("Detecting peaks for target=%s window=%dh", target, window_hours)
 
     # ── Overall (all selected SCs combined) ──
     # Flatten all device IPs for the overall scope
@@ -97,6 +101,7 @@ def find_peaks(state: TrafficIntelState) -> dict:
     bps, pps = _detect_peaks_for_scope(
         repo, target, "overall",
         device_ips=all_device_ips if all_device_ips else None,
+        window_hours=window_hours,
     )
     peaks_bps["overall"] = bps
     peaks_pps["overall"] = pps
@@ -106,6 +111,7 @@ def find_peaks(state: TrafficIntelState) -> dict:
         bps, pps = _detect_peaks_for_scope(
             repo, target, sc_name,
             device_ips=sc_ips,
+            window_hours=window_hours,
         )
         peaks_bps[sc_name] = bps
         peaks_pps[sc_name] = pps

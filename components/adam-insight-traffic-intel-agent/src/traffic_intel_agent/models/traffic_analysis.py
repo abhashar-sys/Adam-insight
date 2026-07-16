@@ -227,6 +227,7 @@ class TrafficIntelState(TypedDict, total=False):
     # Inputs
     detection_target: str
     scrub_centers: list[str]
+    window_hours: int                          # how far back to query sflowsPostmit (default 24)
 
     # Resolution
     device_ips: dict[str, list[str]]       # sc_name → [sampler_address, ...]
@@ -234,7 +235,7 @@ class TrafficIntelState(TypedDict, total=False):
     # Baseline (Cassandra, 6 trailing days)
     baseline: PooledBaseline | None
 
-    # Live peaks (ClickHouse, last 1 hour)
+    # Live peaks (ClickHouse, configurable window via window_hours)
     # Keyed by scope: "overall" + each SC name
     peaks_bps: dict[str, list[PeakWindow]]
     peaks_pps: dict[str, list[PeakWindow]]

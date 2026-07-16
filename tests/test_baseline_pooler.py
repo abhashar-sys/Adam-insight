@@ -1,8 +1,8 @@
 """Tests for baseline_pooler — pooling raw Cassandra profiles."""
 
 from datetime import datetime
-from services.baseline_pooler import pool_baseline
-from models.traffic_analysis import PooledBaseline
+from traffic_intel_agent.services.baseline_pooler import pool_baseline
+from traffic_intel_agent.models.traffic_analysis import PooledBaseline
 
 
 # ─── helpers ──────────────────────────────────────────────────────

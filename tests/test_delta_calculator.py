@@ -1,13 +1,13 @@
 """Tests for DeltaCalculator — compare peak breakdowns against baseline."""
 
 from datetime import datetime
-from models.traffic_analysis import (
+from traffic_intel_agent.models.traffic_analysis import (
     BreakdownEntry,
     PeakBreakdown,
     PeakWindow,
     PooledBaseline,
 )
-from services.delta_calculator import DeltaCalculator
+from traffic_intel_agent.services.delta_calculator import DeltaCalculator
 
 
 # ─── helpers ──────────────────────────────────────────────────────
