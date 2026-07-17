@@ -14,7 +14,7 @@ build:
   
 profiles:
 # dart poc
-- name: poc
+- name: poc-customer-context
   deploy:
     kubeContext: spock-dart-nss1-8
     helm:
