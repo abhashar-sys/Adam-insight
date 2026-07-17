@@ -1,0 +1,630 @@
+openapi: 3.1.0
+info:
+  title: Customer Context Agent API
+  description: Provides customer context information for a given network CIDR and
+    a list of scrub center locations, including mitigation status, customer matches,
+    and attack reports.
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Health Health Get
+  /nodes/customer-context:
+    post:
+      summary: Run customer context node (orchestrator contract)
+      description: 'Fetch mitigation, customer matches, and attack reports for a network
+        CIDR.
+
+
+        Called by the orchestrator with ``network`` and optional ``locations``.
+
+        Returns the full CustomerContextOutputModel wrapped in UnifiedEnvelope.'
+      operationId: invoke_customer_context_node_nodes_customer_context_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvokeRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnifiedEnvelope_NodeResponseData_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /graph/invoke:
+    post:
+      summary: Run full LangGraph pipeline
+      description: Run the full LangGraph pipeline and return all state fields.
+      operationId: invoke_graph_graph_invoke_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvokeRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnifiedEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    AttackEventOutputModel:
+      properties:
+        event_id:
+          type: integer
+          title: Event Id
+        attack_id:
+          type: integer
+          title: Attack Id
+        start_time:
+          type: string
+          title: Start Time
+        end_time:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: End Time
+        attack_vectors:
+          items:
+            type: string
+          type: array
+          title: Attack Vectors
+        agr_peak_bps:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Agr Peak Bps
+        agr_peak_pps:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Agr Peak Pps
+        is_active_attack:
+          type: boolean
+          title: Is Active Attack
+        mitigation_successful:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Mitigation Successful
+        non_mitigated_vectors:
+          items:
+            anyOf:
+            - type: string
+            - type: 'null'
+          type: array
+          title: Non Mitigated Vectors
+      type: object
+      required:
+      - event_id
+      - attack_id
+      - start_time
+      - is_active_attack
+      title: AttackEventOutputModel
+    AttackReportFailureOutputModel:
+      properties:
+        customer_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Customer Id
+        customer_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Customer Name
+        chakra_rs_failure:
+          type: boolean
+          const: true
+          title: Chakra Rs Failure
+        chakra_rs_error:
+          type: string
+          title: Chakra Rs Error
+      type: object
+      required:
+      - chakra_rs_failure
+      - chakra_rs_error
+      title: AttackReportFailureOutputModel
+    AttackReportSuccessOutputModel:
+      properties:
+        customer_name:
+          type: string
+          title: Customer Name
+        kept_events:
+          items:
+            $ref: '#/components/schemas/AttackEventOutputModel'
+          type: array
+          title: Kept Events
+        has_recent_attacks:
+          type: boolean
+          title: Has Recent Attacks
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        historical_pattern:
+          $ref: '#/components/schemas/HistoricalPatternOutputModel'
+        chakra_rs_failure:
+          type: boolean
+          title: Chakra Rs Failure
+        chakra_rs_errors:
+          $ref: '#/components/schemas/ChakraRsErrorsOutputModel'
+      type: object
+      required:
+      - customer_name
+      - has_recent_attacks
+      - historical_pattern
+      - chakra_rs_failure
+      - chakra_rs_errors
+      title: AttackReportSuccessOutputModel
+    ChakraRsErrorsOutputModel:
+      properties:
+        active_attacks_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Active Attacks Error
+        attack_events_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Attack Events Error
+      type: object
+      title: ChakraRsErrorsOutputModel
+    CustomerContextOutputModel:
+      properties:
+        mitigation:
+          anyOf:
+          - $ref: '#/components/schemas/MitigationSuccessOutputModel'
+          - $ref: '#/components/schemas/MitigationErrorOutputModel'
+          - type: 'null'
+          title: Mitigation
+        customers:
+          $ref: '#/components/schemas/CustomersOutputModel'
+        attack_reports:
+          items:
+            anyOf:
+            - $ref: '#/components/schemas/AttackReportSuccessOutputModel'
+            - $ref: '#/components/schemas/AttackReportFailureOutputModel'
+          type: array
+          title: Attack Reports
+      type: object
+      required:
+      - customers
+      title: CustomerContextOutputModel
+    CustomerMatchModel:
+      properties:
+        customer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Customer
+        account_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Account Id
+        account_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Account Name
+        matched_cidr:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Matched Cidr
+      type: object
+      title: CustomerMatchModel
+    CustomersOutputModel:
+      properties:
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        matches:
+          items:
+            $ref: '#/components/schemas/CustomerMatchModel'
+          type: array
+          title: Matches
+      type: object
+      title: CustomersOutputModel
+    DominantVectorOutputModel:
+      properties:
+        vector:
+          type: string
+          title: Vector
+        occurrences:
+          type: integer
+          title: Occurrences
+        share_percent:
+          type: number
+          title: Share Percent
+      type: object
+      required:
+      - vector
+      - occurrences
+      - share_percent
+      title: DominantVectorOutputModel
+    DurationOutputModel:
+      properties:
+        average_duration_hours:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Average Duration Hours
+        longest_duration_hours:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Longest Duration Hours
+        ongoing_count:
+          type: integer
+          title: Ongoing Count
+      type: object
+      required:
+      - ongoing_count
+      title: DurationOutputModel
+    ErrorBlock:
+      properties:
+        code:
+          type: string
+          title: Code
+        message:
+          type: string
+          title: Message
+        details:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Details
+      type: object
+      required:
+      - code
+      - message
+      title: ErrorBlock
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HistoricalPatternOutputModel:
+      properties:
+        summary:
+          type: string
+          title: Summary
+        recurrence:
+          anyOf:
+          - $ref: '#/components/schemas/RecurrenceOutputModel'
+          - type: 'null'
+        vectors:
+          anyOf:
+          - $ref: '#/components/schemas/VectorsOutputModel'
+          - type: 'null'
+        magnitude:
+          anyOf:
+          - $ref: '#/components/schemas/MagnitudeOutputModel'
+          - type: 'null'
+        mitigation_effectiveness:
+          anyOf:
+          - $ref: '#/components/schemas/MitigationEffectivenessOutputModel'
+          - type: 'null'
+        duration:
+          anyOf:
+          - $ref: '#/components/schemas/DurationOutputModel'
+          - type: 'null'
+      type: object
+      required:
+      - summary
+      title: HistoricalPatternOutputModel
+    InvokeRequest:
+      properties:
+        network:
+          type: string
+          title: Network
+          description: Target network CIDR
+        locations:
+          items:
+            type: string
+          type: array
+          title: Locations
+          description: Requested locations
+      type: object
+      required:
+      - network
+      title: InvokeRequest
+    MagnitudeOutputModel:
+      properties:
+        max_peak_bps:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Max Peak Bps
+        average_peak_bps:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Average Peak Bps
+        max_peak_pps:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Max Peak Pps
+        largest_attack_recent:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Largest Attack Recent
+      type: object
+      title: MagnitudeOutputModel
+    MitigationEffectivenessOutputModel:
+      properties:
+        success_rate_percent:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Success Rate Percent
+        successful_count:
+          type: integer
+          title: Successful Count
+        failed_count:
+          type: integer
+          title: Failed Count
+        unknown_outcome_count:
+          type: integer
+          title: Unknown Outcome Count
+        recurring_unmitigated_vectors:
+          items:
+            type: string
+          type: array
+          title: Recurring Unmitigated Vectors
+      type: object
+      required:
+      - successful_count
+      - failed_count
+      - unknown_outcome_count
+      title: MitigationEffectivenessOutputModel
+    MitigationErrorOutputModel:
+      properties:
+        error:
+          type: string
+          title: Error
+      type: object
+      required:
+      - error
+      title: MitigationErrorOutputModel
+    MitigationFunctionOutputModel:
+      properties:
+        function:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Function
+        config:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Config
+      type: object
+      title: MitigationFunctionOutputModel
+    MitigationLocationOutputModel:
+      properties:
+        location:
+          type: string
+          title: Location
+        isSuppressed:
+          type: boolean
+          title: Issuppressed
+        functions:
+          items:
+            $ref: '#/components/schemas/MitigationFunctionOutputModel'
+          type: array
+          title: Functions
+      type: object
+      required:
+      - location
+      - isSuppressed
+      - functions
+      title: MitigationLocationOutputModel
+    MitigationSuccessOutputModel:
+      properties:
+        mitigated_network:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Mitigated Network
+        event_id:
+          anyOf:
+          - type: string
+          - type: integer
+          - type: 'null'
+          title: Event Id
+        event_customer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Event Customer
+        mitigation_state:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Mitigation State
+        is_auto_mitigation:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Is Auto Mitigation
+        locations:
+          items:
+            $ref: '#/components/schemas/MitigationLocationOutputModel'
+          type: array
+          title: Locations
+      type: object
+      title: MitigationSuccessOutputModel
+    NodeResponseData:
+      properties:
+        customer_context:
+          anyOf:
+          - $ref: '#/components/schemas/CustomerContextOutputModel'
+          - type: 'null'
+      type: object
+      title: NodeResponseData
+    RecurrenceOutputModel:
+      properties:
+        total_attacks:
+          type: integer
+          title: Total Attacks
+        average_gap_days:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Average Gap Days
+        longest_quiet_period_days:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Longest Quiet Period Days
+        shortest_gap_days:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Shortest Gap Days
+      type: object
+      required:
+      - total_attacks
+      title: RecurrenceOutputModel
+    UnifiedEnvelope:
+      properties:
+        request_id:
+          type: string
+          title: Request Id
+        service:
+          type: string
+          title: Service
+        status:
+          type: string
+          title: Status
+        generated_at_ns:
+          type: integer
+          title: Generated At Ns
+        latency_ms:
+          type: integer
+          title: Latency Ms
+        error:
+          anyOf:
+          - $ref: '#/components/schemas/ErrorBlock'
+          - type: 'null'
+        data:
+          title: Data
+      type: object
+      required:
+      - request_id
+      - service
+      - status
+      - generated_at_ns
+      - latency_ms
+      - data
+      title: UnifiedEnvelope
+    UnifiedEnvelope_NodeResponseData_:
+      properties:
+        request_id:
+          type: string
+          title: Request Id
+        service:
+          type: string
+          title: Service
+        status:
+          type: string
+          title: Status
+        generated_at_ns:
+          type: integer
+          title: Generated At Ns
+        latency_ms:
+          type: integer
+          title: Latency Ms
+        error:
+          anyOf:
+          - $ref: '#/components/schemas/ErrorBlock'
+          - type: 'null'
+        data:
+          $ref: '#/components/schemas/NodeResponseData'
+      type: object
+      required:
+      - request_id
+      - service
+      - status
+      - generated_at_ns
+      - latency_ms
+      - data
+      title: UnifiedEnvelope[NodeResponseData]
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    VectorsOutputModel:
+      properties:
+        dominant_vectors:
+          items:
+            $ref: '#/components/schemas/DominantVectorOutputModel'
+          type: array
+          title: Dominant Vectors
+        vector_diversity:
+          type: integer
+          title: Vector Diversity
+      type: object
+      required:
+      - vector_diversity
+      title: VectorsOutputModel

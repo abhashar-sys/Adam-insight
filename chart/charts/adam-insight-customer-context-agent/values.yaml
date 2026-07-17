@@ -1,0 +1,21 @@
+xiphos:
+  baseUrl: https://xiphos-dev.dart.qa.akamai.com
+
+customerApi:
+  baseUrl: "http://customer-api.dart-api.svc.cluster.local:8081"
+
+chakraRs:
+  baseUrl: "http://attack-reports-rs.dart-api.svc.cluster.local:9001"
+
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 0.1
+  limits:
+    memory: 256Mi
+    cpu: 0.1 
+
+service:
+  port: 8013
+  protocol: TCP
+  appProtocol: http

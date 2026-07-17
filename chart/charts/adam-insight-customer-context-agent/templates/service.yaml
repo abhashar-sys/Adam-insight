@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "adam-insight-customer-context-agent.name" $ }}
+  namespace: {{ .Values.namespace }}
+  labels:
+  {{- include "adam-insight-customer-context-agent.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+  {{- include "adam-insight-customer-context-agent.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: {{ .Values.service.appProtocol | lower }}-{{ include "adam-insight-customer-context-agent.name" . }}
+      protocol: {{.Values.service.protocol}}
+      port: {{ .Values.service.port }}
+      targetPort: {{.Values.service.port }} 
