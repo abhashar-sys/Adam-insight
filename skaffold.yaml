@@ -1,4 +1,4 @@
-apiVersion: skaffold/v4beta11
+apiVersion: skaffold/v2beta16
 kind: Config
 metadata:
   name: adam-insight
@@ -11,16 +11,52 @@ build:
         buildArgs:
           CTX_PATH: .
           DOCKER_REGISTRY: docker.io
+    - image: registry.spock.tn.akamai.com/plx/adam-insight/adam-insight-signal-intel-agent
+      context: components/adam-insight-signal-intel-agent
+      docker:
+        dockerfile: Dockerfile
+        noCache: true
+    - image: registry.spock.tn.akamai.com/plx/adam-insight/adam-insight-customer-context-agent
+      context: components/adam-insight-customer-context-agent
+      docker:
+        dockerfile: Dockerfile
+        buildArgs:
+          CTX_PATH: .
+          DOCKER_REGISTRY: docker.io
 
 profiles:
-- name: poc
-  deploy:
-    kubeContext: spock-dart-nss1-8
-    helm:
-      releases:
-        - name: adam-insight-traffic-intel-agent
-          namespace: adam
-          chartPath: chart/adam-insight-traffic-intel-agent
-          setValueTemplates:
-            image.repository: "{{.IMAGE_REPO_registry_spock_tn_akamai_com_plx_adam_insight_adam_insight_traffic_intel_agent}}"
-            image.tag: "{{.IMAGE_TAG_registry_spock_tn_akamai_com_plx_adam_insight_adam_insight_traffic_intel_agent}}"
+  - name: poc-traffic-intel-agent
+    deploy:
+      kubeContext: spock-dart-nss1-8
+      helm:
+        releases:
+          - name: adam-insight-traffic-intel-agent
+            namespace: adam
+            chartPath: chart/adam-insight-traffic-intel-agent
+            setValues:
+              localImage: registry.spock.tn.akamai.com/plx/adam-insight/adam-insight-traffic-intel-agent
+
+  - name: poc-signal-intel-agent
+    deploy:
+      kubeContext: spock-dart-nss1-8
+      helm:
+        releases:
+          - name: adam-insight-signal-intel-agent
+            namespace: adam
+            chartPath: chart/charts/adam-insight-signal-intel-agent
+            valuesFiles:
+              - chart/values.yaml
+              - chart/charts/adam-insight-signal-intel-agent/values-env.yaml
+            setValues:
+              localImage: registry.spock.tn.akamai.com/plx/adam-insight/adam-insight-signal-intel-agent
+
+  - name: poc-customer-context
+    deploy:
+      kubeContext: spock-dart-nss1-8
+      helm:
+        releases:
+          - name: adam-insight-customer-context-agent
+            namespace: adam
+            chartPath: chart
+            setValues:
+              adam-insight-customer-context-agent.localImage: registry.spock.tn.akamai.com/plx/adam-insight/adam-insight-customer-context-agent
